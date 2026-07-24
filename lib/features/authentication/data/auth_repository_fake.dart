@@ -18,6 +18,19 @@ class AuthRepositoryFake implements AuthRepository {
   }
 
   @override
+  Future<void> registerCitizen({
+    required CitizenRegistration registration,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 600));
+
+    if (registration.phone.trim().isEmpty || !registration.acceptedTerms) {
+      throw Exception('Invalid registration data');
+    }
+    // Development fake only. A production repository must send this request
+    // over TLS and must never persist the plain-text password locally.
+  }
+
+  @override
   Future<bool> verifyOtp(
       {required String contact, required String code}) async {
     await Future.delayed(const Duration(milliseconds: 400));
@@ -36,6 +49,5 @@ class AuthRepositoryFake implements AuthRepository {
   Future<void> resetPassword(
       {required String contact, required String newPassword}) async {
     await Future.delayed(const Duration(milliseconds: 600));
-    if (newPassword.length < 8) throw Exception('Weak password');
   }
 }

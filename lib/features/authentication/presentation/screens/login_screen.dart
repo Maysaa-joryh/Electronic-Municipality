@@ -328,23 +328,36 @@ class _AuthLoginScreenState extends State<AuthLoginScreen> {
               color: AppColors.surfaceMuted,
               border: Border(top: BorderSide(color: AppColors.divider)),
             ),
-            child: Text.rich(
-              TextSpan(
-                text: 'ليس لديك حساب؟ ',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: AppColors.muted,
-                    ),
-                children: [
-                  TextSpan(
-                    text: 'إنشاء حساب جديد',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: AppColors.gold,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'ليس لديك حساب؟',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: AppColors.muted,
+                      ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                TextButton(
+                  key: const ValueKey('login_signup_button'),
+                  onPressed: _isLoading
+                      ? null
+                      : () => Navigator.of(context).pushNamed(
+                            AppRoutes.signup,
+                          ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.gold,
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    textStyle: Theme.of(context).textTheme.bodyLarge?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
                   ),
-                ],
-              ),
-              textAlign: TextAlign.center,
+                  child: const Text('إنشاء حساب جديد'),
+                ),
+              ],
             ),
           ),
         ],

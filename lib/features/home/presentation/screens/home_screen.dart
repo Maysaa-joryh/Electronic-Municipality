@@ -32,18 +32,18 @@ class HomeScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
+              const Row(
                 children: [
-                  const CircleIcon(
+                  CircleIcon(
                     icon: Icons.account_balance_outlined,
                     size: 50,
                     iconColor: AppColors.primary,
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Text(
                           'مرحبا بك في بوابة المواطن',
                           style: TextStyle(
@@ -95,10 +95,10 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 18),
-        AppPanel(
+        const AppPanel(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children: [
               Text('أحدث الإعلانات',
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
               SizedBox(height: 8),

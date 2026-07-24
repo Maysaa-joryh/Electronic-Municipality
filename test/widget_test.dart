@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:electronic_municipality/app/app.dart';
 
+import 'helpers/widget_test_actions.dart';
+
 void main() {
   testWidgets(
     'app shows splash then navigates to login',
@@ -59,7 +61,10 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(find.byKey(const ValueKey('login_submit_button')));
+      await tapWhenVisible(
+        tester,
+        find.byKey(const ValueKey('login_submit_button')),
+      );
       await tester.pumpAndSettle();
 
       expect(find.byType(NavigationBar), findsOneWidget);

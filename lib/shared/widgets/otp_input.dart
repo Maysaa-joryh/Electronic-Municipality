@@ -1,19 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app/theme/app_colors.dart';
+
 typedef OtpSubmit = void Function(String code);
 
 class OtpInput extends StatefulWidget {
   const OtpInput({
     super.key,
     this.length = 4,
-    required this.onSubmit,
+    required this.onChanged,
+    this.onSubmitted,
     this.textStyle,
     this.enabled = true,
-  });
+  }) : assert(length > 0);
 
   final int length;
-  final OtpSubmit onSubmit;
+  final ValueChanged<String> onChanged;
+  final OtpSubmit? onSubmitted;
   final TextStyle? textStyle;
   final bool enabled;
 
@@ -47,94 +51,114 @@ class _OtpInputState extends State<OtpInput> {
 
   void _onChanged(String value) {
     setState(() {});
-    if (value.length == widget.length) {
-      widget.onSubmit(value);
-    }
+    widget.onChanged(value);
   }
 
   @override
   Widget build(BuildContext context) {
-    final code = _controller.text;
-    final activeIndex = code.length.clamp(0, widget.length - 1);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final gap = constraints.maxWidth < 240 ? 8.0 : 12.0;
+        final fieldWidth = constraints.hasBoundedWidth
+            ? ((constraints.maxWidth - (gap * (widget.length - 1))) /
+                    widget.length)
+                .clamp(44.0, 72.0)
+                .toDouble()
+            : 60.0;
+        final code = _controller.text;
+        final activeIndex = code.length.clamp(0, widget.length - 1);
 
-    return Semantics(
-      label: 'رمز التحقق المكون من ${widget.length} أرقام',
-      textField: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: widget.enabled ? _focusNode.requestFocus : null,
-        child: Stack(
-          children: [
-            IgnorePointer(
-              child: Directionality(
-                textDirection: TextDirection.ltr,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(widget.length, (index) {
-                    final isActive = _focusNode.hasFocus &&
-                        (index == activeIndex ||
-                            (code.length == widget.length &&
-                                index == widget.length - 1));
+        return Semantics(
+          label: 'رمز التحقق المكون من ${widget.length} أرقام',
+          textField: true,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: widget.enabled ? _focusNode.requestFocus : null,
+            child: Stack(
+              children: [
+                IgnorePointer(
+                  child: Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(widget.length, (index) {
+                        final isActive = _focusNode.hasFocus &&
+                            (index == activeIndex ||
+                                (code.length == widget.length &&
+                                    index == widget.length - 1));
 
-                    return Container(
-                      key: ValueKey('otp_digit_$index'),
-                      width: 60,
-                      height: 60,
-                      margin: const EdgeInsets.symmetric(horizontal: 6),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFAFAF8),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isActive
-                              ? const Color(0xFF2A68D8)
-                              : const Color(0xFFD7D8D2),
-                          width: isActive ? 2 : 1,
-                        ),
-                      ),
-                      child: Text(
-                        index < code.length ? code[index] : '',
-                        style: widget.textStyle ??
-                            const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
+                        return Padding(
+                          padding: EdgeInsets.only(
+                            right: index == widget.length - 1 ? 0 : gap,
+                          ),
+                          child: AnimatedContainer(
+                            key: ValueKey('otp_digit_$index'),
+                            duration: const Duration(milliseconds: 120),
+                            width: fieldWidth,
+                            height: 64,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              border: Border.all(
+                                color: isActive
+                                    ? const Color(0xFF2A68D8)
+                                    : AppColors.muted,
+                                width: isActive ? 3 : 1,
+                              ),
                             ),
-                      ),
-                    );
-                  }),
-                ),
-              ),
-            ),
-            Positioned.fill(
-              child: Opacity(
-                opacity: 0,
-                child: TextField(
-                  key: const ValueKey('otp_code_field'),
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  enabled: widget.enabled,
-                  autofocus: true,
-                  keyboardType: TextInputType.number,
-                  textDirection: TextDirection.ltr,
-                  textAlign: TextAlign.center,
-                  maxLength: widget.length,
-                  autofillHints: const [AutofillHints.oneTimeCode],
-                  enableSuggestions: false,
-                  autocorrect: false,
-                  inputFormatters: [
-                    _OtpDigitsFormatter(widget.length),
-                  ],
-                  onChanged: _onChanged,
-                  decoration: const InputDecoration(
-                    counterText: '',
-                    border: InputBorder.none,
+                            child: Text(
+                              index < code.length ? code[index] : '',
+                              style: widget.textStyle ??
+                                  const TextStyle(
+                                    color: AppColors.text,
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
                   ),
                 ),
-              ),
+                Positioned.fill(
+                  child: Opacity(
+                    opacity: 0,
+                    child: TextField(
+                      key: const ValueKey('otp_code_field'),
+                      controller: _controller,
+                      focusNode: _focusNode,
+                      enabled: widget.enabled,
+                      autofocus: true,
+                      keyboardType: TextInputType.number,
+                      textDirection: TextDirection.ltr,
+                      textAlign: TextAlign.center,
+                      textInputAction: TextInputAction.done,
+                      maxLength: widget.length,
+                      autofillHints: const [AutofillHints.oneTimeCode],
+                      enableSuggestions: false,
+                      autocorrect: false,
+                      inputFormatters: [
+                        _OtpDigitsFormatter(widget.length),
+                      ],
+                      onChanged: _onChanged,
+                      onSubmitted: (value) {
+                        if (value.length == widget.length) {
+                          widget.onSubmitted?.call(value);
+                        }
+                      },
+                      decoration: const InputDecoration(
+                        counterText: '',
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

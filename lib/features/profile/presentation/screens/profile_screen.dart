@@ -34,9 +34,9 @@ class ProfileScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-            AppPanel(
+            const AppPanel(
               child: Column(
-                children: const [
+                children: [
                   CircleIcon(icon: Icons.person_outline, size: 84),
                   SizedBox(height: 16),
                   Text(
@@ -86,10 +86,10 @@ class ProfileScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 18),
-            AppPanel(
+            const AppPanel(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: const [
+                children: [
                   CardTitleRow(
                       icon: Icons.badge_outlined,
                       title: 'البيانات الشخصية',

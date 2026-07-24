@@ -34,12 +34,9 @@ class AppRoot extends StatelessWidget {
 
         final Widget page = switch (routeName) {
           AppRoutes.login => const AuthLoginScreen(),
+          AppRoutes.signup => const AuthSignupScreen(),
           AppRoutes.forgot => const AuthForgotPasswordScreen(),
-          AppRoutes.otp => AuthOtpScreen(
-              contact: settings.arguments is String
-                  ? settings.arguments as String
-                  : '',
-            ),
+          AppRoutes.otp => AuthOtpScreen.fromRouteArguments(settings.arguments),
           AppRoutes.reset => AuthResetPasswordScreen(
               contact: settings.arguments is String
                   ? settings.arguments as String

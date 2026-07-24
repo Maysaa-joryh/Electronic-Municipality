@@ -1,21 +1,37 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../../app/design_system.dart';
 import '../../../../app/router.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/di.dart';
+import '../../../../core/repositories/auth_repository.dart';
 import '../../../../shared/widgets/municipality_widgets.dart';
+import '../../../../shared/widgets/otp_input.dart';
 
 class AuthOtpScreen extends StatefulWidget {
   const AuthOtpScreen({
     super.key,
     required this.contact,
+    this.registration,
   });
 
+  factory AuthOtpScreen.fromRouteArguments(Object? arguments) {
+    if (arguments is CitizenRegistration) {
+      return AuthOtpScreen(
+        contact: arguments.phone,
+        registration: arguments,
+      );
+    }
+
+    return AuthOtpScreen(
+      contact: arguments is String ? arguments : '',
+    );
+  }
+
   final String contact;
+  final CitizenRegistration? registration;
 
   @override
   State<AuthOtpScreen> createState() => _AuthOtpScreenState();
@@ -54,23 +70,42 @@ class _AuthOtpScreenState extends State<AuthOtpScreen> {
 
       if (!mounted) return;
 
-      if (verified) {
-        Navigator.of(context).pushNamed(
-          AppRoutes.reset,
-          arguments: widget.contact,
-        );
-      } else {
+      if (!verified) {
         setState(() {
           _errorMessage = 'الرمز غير صحيح. حاول مرة أخرى.';
-          _isLoading = false;
         });
+        return;
       }
+
+      if (widget.registration != null) {
+        await DI.auth.registerCitizen(
+          registration: widget.registration!,
+        );
+
+        if (!mounted) return;
+
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          AppRoutes.shell,
+          (route) => false,
+        );
+        return;
+      }
+
+      await Navigator.of(context).pushNamed(
+        AppRoutes.reset,
+        arguments: widget.contact,
+      );
     } catch (_) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'تعذر التحقق من الرمز. حاول مرة أخرى.';
-          _isLoading = false;
+          _errorMessage = widget.registration == null
+              ? 'تعذر التحقق من الرمز. حاول مرة أخرى.'
+              : 'تعذر إكمال إنشاء الحساب. حاول مرة أخرى.';
         });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -154,10 +189,10 @@ class _AuthOtpScreenState extends State<AuthOtpScreen> {
                     ),
               ),
               const SizedBox(height: AppSpacing.xxxl),
-              _OtpCodeInput(
+              OtpInput(
                 enabled: !_isLoading,
                 onChanged: _onCodeChanged,
-                onSubmitted: _verifyOtp,
+                onSubmitted: (_) => _verifyOtp(),
               ),
               if (_errorMessage != null) ...[
                 const SizedBox(height: AppSpacing.lg),
@@ -239,140 +274,6 @@ class _AuthOtpScreenState extends State<AuthOtpScreen> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _OtpCodeInput extends StatefulWidget {
-  const _OtpCodeInput({
-    required this.enabled,
-    required this.onChanged,
-    required this.onSubmitted,
-  });
-
-  final bool enabled;
-  final ValueChanged<String> onChanged;
-  final VoidCallback onSubmitted;
-
-  @override
-  State<_OtpCodeInput> createState() => _OtpCodeInputState();
-}
-
-class _OtpCodeInputState extends State<_OtpCodeInput> {
-  static const _length = 4;
-
-  late final List<TextEditingController> _controllers;
-  late final List<FocusNode> _focusNodes;
-
-  @override
-  void initState() {
-    super.initState();
-    _controllers = List.generate(
-      _length,
-      (_) => TextEditingController(),
-    );
-    _focusNodes = List.generate(_length, (_) => FocusNode());
-  }
-
-  @override
-  void dispose() {
-    for (final controller in _controllers) {
-      controller.dispose();
-    }
-    for (final focusNode in _focusNodes) {
-      focusNode.dispose();
-    }
-    super.dispose();
-  }
-
-  void _handleChanged(String value, int index) {
-    if (value.isNotEmpty && index < _length - 1) {
-      _focusNodes[index + 1].requestFocus();
-    } else if (value.isEmpty && index > 0) {
-      _focusNodes[index - 1].requestFocus();
-    }
-
-    widget.onChanged(_controllers.map((item) => item.text).join());
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final gap = constraints.maxWidth < 240 ? 8.0 : 12.0;
-        final availableWidth = constraints.maxWidth - (gap * (_length - 1));
-        final fieldWidth =
-            (availableWidth / _length).clamp(44.0, 72.0).toDouble();
-
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(
-            _length,
-            (index) => Padding(
-              padding: EdgeInsetsDirectional.only(
-                end: index == _length - 1 ? 0 : gap,
-              ),
-              child: SizedBox(
-                width: fieldWidth,
-                height: 64,
-                child: TextField(
-                  key: ValueKey('otp_digit_$index'),
-                  controller: _controllers[index],
-                  focusNode: _focusNodes[index],
-                  enabled: widget.enabled,
-                  textAlign: TextAlign.center,
-                  keyboardType: TextInputType.number,
-                  textInputAction: index == _length - 1
-                      ? TextInputAction.done
-                      : TextInputAction.next,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(1),
-                  ],
-                  maxLength: 1,
-                  enableSuggestions: false,
-                  autocorrect: false,
-                  onTap: () {
-                    _controllers[index].selection = TextSelection(
-                      baseOffset: 0,
-                      extentOffset: _controllers[index].text.length,
-                    );
-                  },
-                  onChanged: (value) => _handleChanged(value, index),
-                  onSubmitted:
-                      index == _length - 1 ? (_) => widget.onSubmitted() : null,
-                  style: const TextStyle(
-                    color: AppColors.text,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  decoration: const InputDecoration(
-                    counterText: '',
-                    filled: true,
-                    fillColor: AppColors.surface,
-                    contentPadding: EdgeInsets.zero,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.zero,
-                      borderSide: BorderSide(color: AppColors.muted),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.zero,
-                      borderSide: BorderSide(color: AppColors.muted),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.zero,
-                      borderSide: BorderSide(
-                        color: Color(0xFF2A68D8),
-                        width: 3,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 }

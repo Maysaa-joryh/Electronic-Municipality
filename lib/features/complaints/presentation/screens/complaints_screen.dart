@@ -68,20 +68,20 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
             ),
           ),
         ] else ...[
-          AppPanel(
+          const AppPanel(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('الشكاوى السابقة',
+                Text('الشكاوى السابقة',
                     style:
                         TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
                 _ComplaintItem(
                   title: 'تسرب مياه في الشارع الرئيسي',
                   status: 'قيد التنفيذ',
                   color: AppColors.gold,
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
                 _ComplaintItem(
                   title: 'إنارة شارع معطلة',
                   status: 'تم الحل',

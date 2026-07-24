@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import '../../app/design_system.dart';
 import '../../app/theme/app_colors.dart';
@@ -190,43 +192,113 @@ class AuthCenterScaffold extends StatelessWidget {
     required this.child,
     required this.verticalPadding,
     this.horizontalPadding = AppSpacing.xl,
+    this.decoratedBackground = false,
   });
 
   final Widget child;
   final EdgeInsets verticalPadding;
   final double horizontalPadding;
+  final bool decoratedBackground;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final minContentHeight =
-                (constraints.maxHeight - verticalPadding.vertical)
-                    .clamp(0.0, double.infinity)
-                    .toDouble();
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (decoratedBackground) const _AuthBackgroundDecoration(),
+          SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final minContentHeight =
+                    (constraints.maxHeight - verticalPadding.vertical)
+                        .clamp(0.0, double.infinity)
+                        .toDouble();
 
-            return SingleChildScrollView(
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: EdgeInsets.only(
-                left: horizontalPadding,
-                top: verticalPadding.top,
-                right: horizontalPadding,
-                bottom: verticalPadding.bottom,
-              ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: minContentHeight),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 620),
-                    child: child,
+                return SingleChildScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.only(
+                    left: horizontalPadding,
+                    top: verticalPadding.top,
+                    right: horizontalPadding,
+                    bottom: verticalPadding.bottom,
                   ),
-                ),
-              ),
-            );
-          },
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: minContentHeight),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 620),
+                        child: child,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuthBackgroundDecoration extends StatelessWidget {
+  const _AuthBackgroundDecoration();
+
+  @override
+  Widget build(BuildContext context) {
+    return const IgnorePointer(
+      child: Stack(
+        clipBehavior: Clip.hardEdge,
+        children: [
+          Positioned(
+            width: 800,
+            height: 800,
+            left: -160,
+            top: -160,
+            child: _BlurredCircle(
+              color: Color(0x80F0EEE9),
+              blurSigma: 32,
+            ),
+          ),
+          Positioned(
+            width: 600,
+            height: 600,
+            right: -80,
+            bottom: -80,
+            child: _BlurredCircle(
+              color: Color(0x4DFFDEAE),
+              blurSigma: 32,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BlurredCircle extends StatelessWidget {
+  const _BlurredCircle({
+    required this.color,
+    required this.blurSigma,
+  });
+
+  final Color color;
+  final double blurSigma;
+
+  @override
+  Widget build(BuildContext context) {
+    return ImageFiltered(
+      imageFilter: ui.ImageFilter.blur(
+        sigmaX: blurSigma,
+        sigmaY: blurSigma,
+      ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
         ),
       ),
     );

@@ -14,7 +14,7 @@ class PasswordStrengthIndicator extends StatelessWidget {
   List<PasswordRequirement> _getRequirements() {
     return [
       PasswordRequirement(
-        label: 'أحرف على الأقل 8',
+        label: '8 أحرف على الأقل',
         met: password.length >= 8,
       ),
       PasswordRequirement(
@@ -34,18 +34,21 @@ class PasswordStrengthIndicator extends StatelessWidget {
     final requirements = _getRequirements();
 
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      key: const ValueKey('password_requirements'),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
         color: AppColors.surfaceMuted,
-        borderRadius: BorderRadius.circular(AppRadius.md),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.divider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'يجب أن تحتوي كلمة المرور على:',
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: AppColors.text,
+                  fontWeight: FontWeight.w700,
                 ),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -53,16 +56,21 @@ class PasswordStrengthIndicator extends StatelessWidget {
             Row(
               children: [
                 Icon(
-                  req.met ? Icons.check_circle : Icons.radio_button_unchecked,
-                  size: 18,
+                  req.met
+                      ? Icons.check_circle_outline_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  size: 22,
                   color: req.met ? AppColors.success : AppColors.muted,
                 ),
                 const SizedBox(width: AppSpacing.md),
-                Text(
-                  req.label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: req.met ? AppColors.success : AppColors.muted,
+                Expanded(
+                  child: Text(
+                    req.label,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: req.met ? AppColors.success : AppColors.muted,
+                      height: 1.4,
+                    ),
                   ),
                 ),
               ],

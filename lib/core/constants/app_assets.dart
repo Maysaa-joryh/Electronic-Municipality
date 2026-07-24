@@ -1,9 +1,11 @@
-class AppAssets {
-  static const municipalityLogoLight =
-      'assets/images/municipality_logo_light.png';
+abstract final class AppAssets {
+  static const String _imagesPath = 'assets/images';
 
-  static const municipalityLogoDark =
-      'assets/images/municipality_logo_dark.png';
+  static const String municipalityLogoLight =
+      '$_imagesPath/municipality_logo_light.png';
 
-  static const cityNews = 'assets/images/city_news.png';
+  static const String municipalityLogoDark =
+      '$_imagesPath/municipality_logo_dark.png';
+
+  static const String cityNews = '$_imagesPath/city_news.png';
 }

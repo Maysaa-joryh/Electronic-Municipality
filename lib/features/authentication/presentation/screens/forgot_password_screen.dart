@@ -37,21 +37,18 @@ class _AuthForgotPasswordScreenState extends State<AuthForgotPasswordScreen> {
     try {
       await DI.auth.requestOtp(contact: contact);
 
-      if (!mounted) return;
-
-      await Navigator.of(context).pushNamed(
-        AppRoutes.otp,
-        arguments: contact,
-      );
+      if (mounted) {
+        Navigator.of(context).pushNamed(
+          AppRoutes.otp,
+          arguments: contact,
+        );
+      }
     } catch (_) {
       if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('فشل إرسال الرمز. حاول مرة أخرى.')),
         );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
       }
     }
   }

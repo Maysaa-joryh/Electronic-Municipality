@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../app/design_system.dart';
 import '../../app/theme/app_colors.dart';
 import '../../core/constants/app_assets.dart';
 
@@ -184,11 +185,16 @@ class BackTextButton extends StatelessWidget {
 }
 
 class AuthCenterScaffold extends StatelessWidget {
-  const AuthCenterScaffold(
-      {super.key, required this.child, required this.verticalPadding});
+  const AuthCenterScaffold({
+    super.key,
+    required this.child,
+    required this.verticalPadding,
+    this.horizontalPadding = AppSpacing.xl,
+  });
 
   final Widget child;
   final EdgeInsets verticalPadding;
+  final double horizontalPadding;
 
   @override
   Widget build(BuildContext context) {
@@ -197,14 +203,27 @@ class AuthCenterScaffold extends StatelessWidget {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
+            final minContentHeight =
+                (constraints.maxHeight - verticalPadding.vertical)
+                    .clamp(0.0, double.infinity)
+                    .toDouble();
+
             return SingleChildScrollView(
-              padding: verticalPadding,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: EdgeInsets.only(
+                left: horizontalPadding,
+                top: verticalPadding.top,
+                right: horizontalPadding,
+                bottom: verticalPadding.bottom,
+              ),
               child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                constraints: BoxConstraints(minHeight: minContentHeight),
                 child: Center(
-                    child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 620),
-                        child: child)),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 620),
+                    child: child,
+                  ),
+                ),
               ),
             );
           },
@@ -243,17 +262,20 @@ class AuthCard extends StatelessWidget {
 }
 
 class AppPanel extends StatelessWidget {
-  const AppPanel(
-      {super.key,
-      required this.child,
-      this.padding = const EdgeInsets.all(22),
-      this.borderColor = AppColors.border,
-      this.elevation = false});
+  const AppPanel({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(22),
+    this.borderColor = AppColors.border,
+    this.elevation = false,
+    this.borderRadius = AppRadius.md,
+  });
 
   final Widget child;
   final EdgeInsets padding;
   final Color borderColor;
   final bool elevation;
+  final double borderRadius;
 
   @override
   Widget build(BuildContext context) {
@@ -262,7 +284,7 @@ class AppPanel extends StatelessWidget {
       padding: padding,
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(borderRadius),
         border: Border.all(color: borderColor),
         boxShadow: [
           BoxShadow(
@@ -277,36 +299,24 @@ class AppPanel extends StatelessWidget {
 }
 
 class MunicipalityLogo extends StatelessWidget {
-  const MunicipalityLogo({
-    super.key,
-    required this.size,
-    this.framed = true,
-    this.brightness,
-  });
+  const MunicipalityLogo({super.key, required this.size, this.framed = true});
 
   final double size;
   final bool framed;
-  final Brightness? brightness;
 
   @override
   Widget build(BuildContext context) {
-    final effectiveBrightness = brightness ?? Theme.of(context).brightness;
-
-    final assetPath = effectiveBrightness == Brightness.dark
+    final assetPath = Theme.of(context).brightness == Brightness.dark
         ? AppAssets.municipalityLogoDark
         : AppAssets.municipalityLogoLight;
+
     final image = Image.asset(
       assetPath,
       width: size,
       height: size,
       fit: BoxFit.contain,
       filterQuality: FilterQuality.high,
-      errorBuilder: (context, error, stackTrace) {
-        return Icon(
-          Icons.account_balance,
-          size: size * 0.65,
-        );
-      },
+      gaplessPlayback: true,
     );
 
     if (!framed) return image;

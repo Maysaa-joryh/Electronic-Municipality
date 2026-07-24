@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:electronic_municipality/core/repositories/auth_repository.dart';
 
 class AuthRepositoryFake implements AuthRepository {
+  static const developmentOtpCode = '1234';
+
   final Map<String, String> _otpStore = {};
 
   @override
@@ -26,9 +28,8 @@ class AuthRepositoryFake implements AuthRepository {
   @override
   Future<void> requestOtp({required String contact}) async {
     await Future.delayed(const Duration(milliseconds: 500));
-    // Generate a deterministic fake 4-digit code for testing
-    final code = (contact.hashCode.abs() % 9000 + 1000).toString();
-    _otpStore[contact] = code;
+    // Development-only fake. A production repository must issue OTPs server-side.
+    _otpStore[contact] = developmentOtpCode;
   }
 
   @override

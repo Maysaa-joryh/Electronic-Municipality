@@ -277,18 +277,37 @@ class AppPanel extends StatelessWidget {
 }
 
 class MunicipalityLogo extends StatelessWidget {
-  const MunicipalityLogo({super.key, required this.size, this.framed = true});
+  const MunicipalityLogo({
+    super.key,
+    required this.size,
+    this.framed = true,
+    this.brightness,
+  });
 
   final double size;
   final bool framed;
+  final Brightness? brightness;
 
   @override
   Widget build(BuildContext context) {
-    final image = Image.asset(AppAssets.municipalityLogo,
-        width: size,
-        height: size,
-        fit: BoxFit.contain,
-        filterQuality: FilterQuality.high);
+    final effectiveBrightness = brightness ?? Theme.of(context).brightness;
+
+    final assetPath = effectiveBrightness == Brightness.dark
+        ? AppAssets.municipalityLogoDark
+        : AppAssets.municipalityLogoLight;
+    final image = Image.asset(
+      assetPath,
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.high,
+      errorBuilder: (context, error, stackTrace) {
+        return Icon(
+          Icons.account_balance,
+          size: size * 0.65,
+        );
+      },
+    );
 
     if (!framed) return image;
 

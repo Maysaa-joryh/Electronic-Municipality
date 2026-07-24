@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:electronic_municipality/app/app.dart';
@@ -11,8 +12,9 @@ void main() {
       // شاشة البداية تظهر أولًا.
       expect(find.text('بلديتنا الإلكترونية'), findsOneWidget);
       expect(find.text('بوابة المواطن الرقمية'), findsOneWidget);
-      // محاكاة مرور مدة شاشة البداية البالغة ثانيتين.
-      await tester.pump(const Duration(seconds: 2));
+
+      // محاكاة مرور مدة شاشة البداية البالغة ثلاث ثوانٍ.
+      await tester.pump(const Duration(seconds: 3));
 
       // إكمال حركة الانتقال إلى شاشة تسجيل الدخول.
       await tester.pumpAndSettle();
@@ -22,7 +24,7 @@ void main() {
         find.text('رقم الهاتف أو البريد الإلكتروني'),
         findsOneWidget,
       );
-      expect(find.text('هل نسيت كلمة المرور؟'), findsOneWidget);
+      expect(find.text('نسيت كلمة المرور؟'), findsOneWidget);
       expect(
         find.textContaining(
           'إنشاء حساب جديد',
@@ -30,6 +32,37 @@ void main() {
         ),
         findsOneWidget,
       );
+    },
+  );
+
+  testWidgets(
+    'visitor can enter without credentials',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(const AppRoot());
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('visitor_tab')));
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('login_identifier_field')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('login_password_field')),
+        findsNothing,
+      );
+      expect(find.text('نسيت كلمة المرور؟'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('visitor_message')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('login_submit_button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(NavigationBar), findsOneWidget);
     },
   );
 }

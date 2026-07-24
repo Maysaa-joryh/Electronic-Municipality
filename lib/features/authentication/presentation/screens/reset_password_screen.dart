@@ -8,7 +8,12 @@ import '../../../../shared/widgets/form_components.dart';
 import '../../../../shared/widgets/municipality_widgets.dart';
 
 class AuthResetPasswordScreen extends StatefulWidget {
-  const AuthResetPasswordScreen({super.key});
+  const AuthResetPasswordScreen({
+    super.key,
+    required this.contact,
+  });
+
+  final String contact;
 
   @override
   State<AuthResetPasswordScreen> createState() =>
@@ -47,9 +52,8 @@ class _AuthResetPasswordScreenState extends State<AuthResetPasswordScreen> {
     });
 
     try {
-      // Use test contact - in real app this would come from context
       await DI.auth.resetPassword(
-        contact: 'test@example.com',
+        contact: widget.contact,
         newPassword: _newPasswordController.text,
       );
       if (mounted) {

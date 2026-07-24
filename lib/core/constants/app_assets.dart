@@ -1,4 +1,9 @@
 class AppAssets {
-  static const municipalityLogo = 'assets/images/municipality_logo.png';
+  static const municipalityLogoLight =
+      'assets/images/municipality_logo_light.png';
+
+  static const municipalityLogoDark =
+      'assets/images/municipality_logo_dark.png';
+
   static const cityNews = 'assets/images/city_news.png';
 }

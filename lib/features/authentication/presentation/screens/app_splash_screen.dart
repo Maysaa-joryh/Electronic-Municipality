@@ -14,7 +14,7 @@ class AppSplashScreen extends StatefulWidget {
 
 class _AppSplashScreenState extends State<AppSplashScreen>
     with SingleTickerProviderStateMixin {
-  static const _splashDuration = Duration(seconds: 2);
+  static const _splashDuration = Duration(seconds: 3);
 
   late final AnimationController _progressController;
 
@@ -51,10 +51,8 @@ class _AppSplashScreenState extends State<AppSplashScreen>
         builder: (context, constraints) {
           final width = constraints.maxWidth;
           final height = constraints.maxHeight;
-          final logoSize =
-              (width * 0.45).clamp(132.0, 180.0).toDouble();
-          final progressWidth =
-              (width * 0.533).clamp(168.0, 220.0).toDouble();
+          final logoSize = (width * 0.45).clamp(132.0, 180.0).toDouble();
+          final progressWidth = (width * 0.533).clamp(168.0, 220.0).toDouble();
 
           return CustomPaint(
             painter: const _SplashFramePainter(),
@@ -130,6 +128,8 @@ class _SplashProgressBar extends StatelessWidget {
       child: AnimatedBuilder(
         animation: animation,
         builder: (context, child) {
+          final progress = Curves.easeInOutCubic.transform(animation.value);
+
           return Container(
             width: width,
             height: 4,
@@ -138,12 +138,12 @@ class _SplashProgressBar extends StatelessWidget {
               color: AppColors.splashProgressTrack,
               borderRadius: BorderRadius.circular(2),
             ),
-            alignment: Alignment.centerRight,
-            child: FractionallySizedBox(
-              widthFactor: animation.value,
+            child: Align(
               alignment: Alignment.centerRight,
-              child: const DecoratedBox(
-                decoration: BoxDecoration(
+              child: Container(
+                width: width * progress,
+                height: 4,
+                decoration: const BoxDecoration(
                   color: AppColors.goldLight,
                 ),
               ),

@@ -59,9 +59,9 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/images/municipality_logo.png
     - assets/images/city_news.png
-
+    - assets/images/municipality_logo_light.png
+    - assets/images/municipality_logo_dark.png
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

@@ -4,7 +4,6 @@ import '../../../../app/design_system.dart';
 import '../../../../app/router.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/di.dart';
-import '../../../../shared/widgets/form_components.dart';
 import '../../../../shared/widgets/municipality_widgets.dart';
 
 class AuthForgotPasswordScreen extends StatefulWidget {
@@ -18,6 +17,7 @@ class AuthForgotPasswordScreen extends StatefulWidget {
 class _AuthForgotPasswordScreenState extends State<AuthForgotPasswordScreen> {
   final _contactController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+
   bool _isLoading = false;
 
   @override
@@ -26,23 +26,28 @@ class _AuthForgotPasswordScreenState extends State<AuthForgotPasswordScreen> {
     super.dispose();
   }
 
-  void _sendCode() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+  Future<void> _sendCode() async {
+    FocusManager.instance.primaryFocus?.unfocus();
 
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    final contact = _contactController.text.trim();
     setState(() => _isLoading = true);
 
     try {
-      await DI.auth.requestOtp(contact: _contactController.text);
+      await DI.auth.requestOtp(contact: contact);
+
       if (mounted) {
-        Navigator.of(context).pushNamed(AppRoutes.otp);
+        Navigator.of(context).pushNamed(
+          AppRoutes.otp,
+          arguments: contact,
+        );
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('فشل إرسال الرمز')),
+          const SnackBar(content: Text('فشل إرسال الرمز. حاول مرة أخرى.')),
         );
       }
     }
@@ -51,98 +56,195 @@ class _AuthForgotPasswordScreenState extends State<AuthForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return AuthCenterScaffold(
-      verticalPadding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
-      child: SingleChildScrollView(
-        child: Column(
-          children: [
-            const MunicipalityLogo(size: 56),
-            const SizedBox(height: AppSpacing.xxl),
-
-            // Icon
-            const Center(
-              child: CircleIcon(
-                icon: Icons.lock_outline,
-                size: 80,
-                iconColor: AppColors.gold,
+      verticalPadding: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.xl,
+          vertical: AppSpacing.xxxl,
+        ),
+        child: AuthCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Center(
+                child: MunicipalityLogo(
+                  size: 104,
+                  framed: false,
+                ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-
-            // Title
-            Text(
-              'نسيت كلمة المرور',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-
-            // Description
-            Text(
-              'أدخل رقم هاتفك أو بريدك الإلكتروني لاسترجاع كلمة المرور',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.muted,
-                  ),
-            ),
-            const SizedBox(height: AppSpacing.xxl),
-
-            // Form
-            Form(
-              key: _formKey,
-              child: AppTextField(
-                label: 'رقم الهاتف أو البريد الإلكتروني',
-                hint: 'أدخل رقم الهاتف أو البريد',
-                controller: _contactController,
-                prefixIcon: Icons.person_outline,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'هذا الحقل مطلوب';
-                  }
-                  return null;
-                },
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xxl),
-
-            // Send button
-            SizedBox(
-              width: double.infinity,
-              height: AppStates.buttonHeight,
-              child: FilledButton(
-                onPressed: _isLoading ? null : _sendCode,
-                child: _isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : Text('إرسال الرمز',
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              color: Colors.white,
-                            )),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-
-            // Back button
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(
-                'العودة إلى تسجيل الدخول',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.gold,
+              const SizedBox(height: AppSpacing.xxxl),
+              Text(
+                'نسيت كلمة المرور',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                      color: AppColors.text,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
                     ),
               ),
-            ),
-          ],
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'أدخل رقم هاتفك أو بريدك الإلكتروني لاسترداد كلمة المرور',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: AppColors.muted,
+                      fontSize: 17,
+                      height: 1.7,
+                    ),
+              ),
+              const SizedBox(height: AppSpacing.huge),
+              Form(
+                key: _formKey,
+                child: _ContactField(
+                  controller: _contactController,
+                  onSubmitted: (_) {
+                    if (!_isLoading) _sendCode();
+                  },
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xxxl),
+              SizedBox(
+                height: 64,
+                child: FilledButton(
+                  key: const ValueKey('forgot_send_code_button'),
+                  onPressed: _isLoading ? null : _sendCode,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.deepPrimary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
+                    elevation: 8,
+                    shadowColor: Colors.black.withOpacity(0.18),
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'إرسال الرمز',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleLarge
+                                  ?.copyWith(
+                                    color: Colors.white,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            const Icon(Icons.send_rounded, size: 27),
+                          ],
+                        ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.huge),
+              Center(
+                child: TextButton.icon(
+                  key: const ValueKey('forgot_back_button'),
+                  onPressed:
+                      _isLoading ? null : () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.arrow_forward_rounded, size: 27),
+                  label: const Text('العودة إلى تسجيل الدخول'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.gold,
+                    textStyle: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
+    );
+  }
+}
+
+class _ContactField extends StatelessWidget {
+  const _ContactField({
+    required this.controller,
+    required this.onSubmitted,
+  });
+
+  final TextEditingController controller;
+  final ValueChanged<String> onSubmitted;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'رقم الهاتف أو البريد الإلكتروني',
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: AppColors.text,
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        TextFormField(
+          key: const ValueKey('forgot_contact_field'),
+          controller: controller,
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return 'رقم الهاتف أو البريد الإلكتروني مطلوب';
+            }
+            return null;
+          },
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.done,
+          autofillHints: const [
+            AutofillHints.username,
+            AutofillHints.email,
+            AutofillHints.telephoneNumber,
+          ],
+          onFieldSubmitted: onSubmitted,
+          textDirection: TextDirection.rtl,
+          decoration: InputDecoration(
+            hintText: 'أدخل هنا...',
+            prefixIcon: const Icon(
+              Icons.contact_mail_outlined,
+              color: AppColors.gold,
+              size: 30,
+            ),
+            filled: true,
+            fillColor: AppColors.surface,
+            constraints: const BoxConstraints(minHeight: 64),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.lg,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              borderSide: const BorderSide(color: AppColors.border),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              borderSide: const BorderSide(color: AppColors.border),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              borderSide: const BorderSide(
+                color: AppColors.primary,
+                width: 1.5,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

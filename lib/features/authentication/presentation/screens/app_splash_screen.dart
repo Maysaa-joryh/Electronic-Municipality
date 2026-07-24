@@ -12,63 +12,209 @@ class AppSplashScreen extends StatefulWidget {
   State<AppSplashScreen> createState() => _AppSplashScreenState();
 }
 
-class _AppSplashScreenState extends State<AppSplashScreen> {
+class _AppSplashScreenState extends State<AppSplashScreen>
+    with SingleTickerProviderStateMixin {
+  static const _splashDuration = Duration(seconds: 2);
+
+  late final AnimationController _progressController;
+
   @override
   void initState() {
     super.initState();
-    _navigateToLogin();
+    _progressController = AnimationController(
+      vsync: this,
+      duration: _splashDuration,
+    )
+      ..addStatusListener(_handleProgressStatus)
+      ..forward();
   }
 
-  void _navigateToLogin() {
-    Future.delayed(
-      const Duration(milliseconds: 2000),
-      () {
-        if (mounted) {
-          Navigator.of(context).pushReplacementNamed(AppRoutes.login);
-        }
-      },
-    );
+  void _handleProgressStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed && mounted) {
+      Navigator.of(context).pushReplacementNamed(AppRoutes.login);
+    }
+  }
+
+  @override
+  void dispose() {
+    _progressController
+      ..removeStatusListener(_handleProgressStatus)
+      ..dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment.center,
-            radius: 1.5,
-            colors: [
-              AppColors.emerald,
-              AppColors.emerald.withOpacity(0.7),
-              AppColors.deepPrimary,
-            ],
-          ),
-        ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const MunicipalityLogo(size: 120),
-              const SizedBox(height: AppSpacing.xl),
-              Text(
-                'الخدمات الإلكترونية',
-                style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
+      backgroundColor: AppColors.emerald,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final height = constraints.maxHeight;
+          final logoSize =
+              (width * 0.45).clamp(132.0, 180.0).toDouble();
+          final progressWidth =
+              (width * 0.533).clamp(168.0, 220.0).toDouble();
+
+          return CustomPaint(
+            painter: const _SplashFramePainter(),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Positioned(
+                  top: height * 0.25875,
+                  left: 0,
+                  right: 0,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      MunicipalityLogo(size: logoSize),
+                      SizedBox(height: width * 0.061),
+                      const Text(
+                        'بلديتنا الإلكترونية',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: AppColors.goldLight,
+                          fontSize: 30,
+                          fontWeight: FontWeight.w400,
+                          height: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      const Text(
+                        'بوابة المواطن الرقمية',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: AppColors.splashSubtitle,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
+                          height: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Positioned(
+                  top: height * 0.64625,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: _SplashProgressBar(
+                      animation: _progressController,
+                      width: progressWidth,
                     ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                'الجمهورية العربية السورية',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: AppColors.gold,
-                    ),
-              ),
-            ],
-          ),
-        ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
+}
+
+class _SplashProgressBar extends StatelessWidget {
+  const _SplashProgressBar({
+    required this.animation,
+    required this.width,
+  });
+
+  final Animation<double> animation;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'جارٍ تحميل بوابة المواطن الرقمية',
+      child: AnimatedBuilder(
+        animation: animation,
+        builder: (context, child) {
+          return Container(
+            width: width,
+            height: 4,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: AppColors.splashProgressTrack,
+              borderRadius: BorderRadius.circular(2),
+            ),
+            alignment: Alignment.centerRight,
+            child: FractionallySizedBox(
+              widthFactor: animation.value,
+              alignment: Alignment.centerRight,
+              child: const DecoratedBox(
+                decoration: BoxDecoration(
+                  color: AppColors.goldLight,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SplashFramePainter extends CustomPainter {
+  const _SplashFramePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final strokeWidth = size.width * (8 / 720);
+    final lineCenter = size.width * (68 / 720);
+    final segmentLength = size.width * (256 / 720);
+    final paint = Paint()
+      ..color = AppColors.splashFrame
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.butt;
+
+    canvas
+      // Top-left corner.
+      ..drawLine(
+        Offset(lineCenter, 0),
+        Offset(lineCenter, segmentLength),
+        paint,
+      )
+      ..drawLine(
+        Offset.zero.translate(0, lineCenter),
+        Offset(segmentLength, lineCenter),
+        paint,
+      )
+      // Top-right corner.
+      ..drawLine(
+        Offset(size.width - lineCenter, 0),
+        Offset(size.width - lineCenter, segmentLength),
+        paint,
+      )
+      ..drawLine(
+        Offset(size.width - segmentLength, lineCenter),
+        Offset(size.width, lineCenter),
+        paint,
+      )
+      // Bottom-left corner.
+      ..drawLine(
+        Offset(lineCenter, size.height - segmentLength),
+        Offset(lineCenter, size.height),
+        paint,
+      )
+      ..drawLine(
+        Offset(0, size.height - lineCenter),
+        Offset(segmentLength, size.height - lineCenter),
+        paint,
+      )
+      // Bottom-right corner.
+      ..drawLine(
+        Offset(size.width - lineCenter, size.height - segmentLength),
+        Offset(size.width - lineCenter, size.height),
+        paint,
+      )
+      ..drawLine(
+        Offset(size.width - segmentLength, size.height - lineCenter),
+        Offset(size.width, size.height - lineCenter),
+        paint,
+      );
+  }
+
+  @override
+  bool shouldRepaint(covariant _SplashFramePainter oldDelegate) => false;
 }

@@ -10,7 +10,10 @@ class AppColors {
   static const Color mint = Color(0xFFC8F1DD);
   static const Color gold = Color(0xFF87672C);
   static const Color goldLight = Color(0xFFE9C176);
-
+// Splash screen
+  static const Color splashFrame = Color(0xFF395740);
+  static const Color splashSubtitle = Color(0xFF84B3A5);
+  static const Color splashProgressTrack = Color(0xFF00261E);
   // Backgrounds
   static const Color background = Color(0xFFFBF9F4);
   static const Color surface = Color(0xFFFFFFFF);

@@ -9,9 +9,8 @@ void main() {
       await tester.pumpWidget(const AppRoot());
 
       // شاشة البداية تظهر أولًا.
-      expect(find.text('الخدمات الإلكترونية'), findsOneWidget);
-      expect(find.text('الجمهورية العربية السورية'), findsOneWidget);
-
+      expect(find.text('بلديتنا الإلكترونية'), findsOneWidget);
+      expect(find.text('بوابة المواطن الرقمية'), findsOneWidget);
       // محاكاة مرور مدة شاشة البداية البالغة ثانيتين.
       await tester.pump(const Duration(seconds: 2));
 

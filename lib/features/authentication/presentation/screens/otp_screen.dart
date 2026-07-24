@@ -78,19 +78,8 @@ class _AuthOtpScreenState extends State<AuthOtpScreen> {
   Future<bool> _resendOtp() async {
     try {
       await DI.auth.requestOtp(contact: widget.contact);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تمت إعادة إرسال الرمز')),
-        );
-      }
       return true;
     } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('فشل إعادة إرسال الرمز')),
-        );
-      }
       return false;
     }
   }
@@ -261,38 +250,32 @@ class _OtpCodeInput extends StatefulWidget {
 class _OtpCodeInputState extends State<_OtpCodeInput> {
   static const _length = 4;
 
-  late final List<TextEditingController> _controllers;
-  late final List<FocusNode> _focusNodes;
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
 
   @override
   void initState() {
     super.initState();
-    _controllers = List.generate(
-      _length,
-      (_) => TextEditingController(),
-    );
-    _focusNodes = List.generate(_length, (_) => FocusNode());
+    _controller = TextEditingController();
+    _focusNode = FocusNode()..addListener(_handleFocusChanged);
   }
 
   @override
   void dispose() {
-    for (final controller in _controllers) {
-      controller.dispose();
-    }
-    for (final focusNode in _focusNodes) {
-      focusNode.dispose();
-    }
+    _focusNode
+      ..removeListener(_handleFocusChanged)
+      ..dispose();
+    _controller.dispose();
     super.dispose();
   }
 
-  void _handleChanged(String value, int index) {
-    if (value.isNotEmpty && index < _length - 1) {
-      _focusNodes[index + 1].requestFocus();
-    } else if (value.isEmpty && index > 0) {
-      _focusNodes[index - 1].requestFocus();
-    }
+  void _handleFocusChanged() {
+    if (mounted) setState(() {});
+  }
 
-    widget.onChanged(_controllers.map((item) => item.text).join());
+  void _handleChanged(String value) {
+    setState(() {});
+    widget.onChanged(value);
   }
 
   @override
@@ -303,72 +286,96 @@ class _OtpCodeInputState extends State<_OtpCodeInput> {
         final availableWidth = constraints.maxWidth - (gap * (_length - 1));
         final fieldWidth =
             (availableWidth / _length).clamp(44.0, 72.0).toDouble();
+        final code = _controller.text;
+        final activeIndex = code.length.clamp(0, _length - 1);
 
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(
-            _length,
-            (index) => Padding(
-              padding: EdgeInsetsDirectional.only(
-                end: index == _length - 1 ? 0 : gap,
-              ),
-              child: SizedBox(
-                width: fieldWidth,
-                height: 64,
-                child: TextField(
-                  key: ValueKey('otp_digit_$index'),
-                  controller: _controllers[index],
-                  focusNode: _focusNodes[index],
-                  enabled: widget.enabled,
-                  textAlign: TextAlign.center,
-                  keyboardType: TextInputType.number,
-                  textInputAction: index == _length - 1
-                      ? TextInputAction.done
-                      : TextInputAction.next,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(1),
-                  ],
-                  maxLength: 1,
-                  enableSuggestions: false,
-                  autocorrect: false,
-                  onTap: () {
-                    _controllers[index].selection = TextSelection(
-                      baseOffset: 0,
-                      extentOffset: _controllers[index].text.length,
-                    );
-                  },
-                  onChanged: (value) => _handleChanged(value, index),
-                  onSubmitted:
-                      index == _length - 1 ? (_) => widget.onSubmitted() : null,
-                  style: const TextStyle(
-                    color: AppColors.text,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  decoration: const InputDecoration(
-                    counterText: '',
-                    filled: true,
-                    fillColor: AppColors.surface,
-                    contentPadding: EdgeInsets.zero,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.zero,
-                      borderSide: BorderSide(color: AppColors.muted),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.zero,
-                      borderSide: BorderSide(color: AppColors.muted),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.zero,
-                      borderSide: BorderSide(
-                        color: Color(0xFF2A68D8),
-                        width: 3,
+        return Semantics(
+          label: 'رمز التحقق المكون من 4 أرقام',
+          textField: true,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: widget.enabled ? _focusNode.requestFocus : null,
+            child: Stack(
+              children: [
+                IgnorePointer(
+                  child: Directionality(
+                    textDirection: TextDirection.ltr,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        _length,
+                        (index) {
+                          final isActive = _focusNode.hasFocus &&
+                              (index == activeIndex ||
+                                  (code.length == _length &&
+                                      index == _length - 1));
+
+                          return Padding(
+                            padding: EdgeInsets.only(
+                              right: index == _length - 1 ? 0 : gap,
+                            ),
+                            child: AnimatedContainer(
+                              key: ValueKey('otp_digit_$index'),
+                              duration: const Duration(milliseconds: 120),
+                              width: fieldWidth,
+                              height: 64,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: AppColors.surface,
+                                border: Border.all(
+                                  color: isActive
+                                      ? const Color(0xFF2A68D8)
+                                      : AppColors.muted,
+                                  width: isActive ? 3 : 1,
+                                ),
+                              ),
+                              child: Text(
+                                index < code.length ? code[index] : '',
+                                style: const TextStyle(
+                                  color: AppColors.text,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ),
                 ),
-              ),
+                Positioned.fill(
+                  child: Opacity(
+                    opacity: 0,
+                    child: TextField(
+                      key: const ValueKey('otp_code_field'),
+                      controller: _controller,
+                      focusNode: _focusNode,
+                      enabled: widget.enabled,
+                      autofocus: true,
+                      keyboardType: TextInputType.number,
+                      textDirection: TextDirection.ltr,
+                      textAlign: TextAlign.center,
+                      textInputAction: TextInputAction.done,
+                      autofillHints: const [AutofillHints.oneTimeCode],
+                      inputFormatters: const [_OtpDigitsFormatter(_length)],
+                      maxLength: _length,
+                      enableSuggestions: false,
+                      autocorrect: false,
+                      onChanged: _handleChanged,
+                      onSubmitted: (_) {
+                        if (_controller.text.length == _length) {
+                          widget.onSubmitted();
+                        }
+                      },
+                      decoration: const InputDecoration(
+                        counterText: '',
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         );
@@ -394,8 +401,6 @@ class _ResendCodeSectionState extends State<_ResendCodeSection> {
   Timer? _timer;
   int _secondsRemaining = _duration;
   bool _isResending = false;
-
-  bool get _canResend => _secondsRemaining == 0 && !_isResending;
 
   @override
   void initState() {
@@ -427,7 +432,15 @@ class _ResendCodeSectionState extends State<_ResendCodeSection> {
   }
 
   Future<void> _resend() async {
-    if (!_canResend) return;
+    if (_isResending) return;
+
+    if (_secondsRemaining > 0) {
+      _showMessage(
+        'لا يمكنك إعادة إرسال الرمز قبل انتهاء المدة. '
+        'الوقت المتبقي: $_formattedTime',
+      );
+      return;
+    }
 
     setState(() => _isResending = true);
     final sent = await widget.onResend();
@@ -439,7 +452,27 @@ class _ResendCodeSectionState extends State<_ResendCodeSection> {
       if (sent) _secondsRemaining = _duration;
     });
 
-    if (sent) _startTimer();
+    if (sent) {
+      _showMessage('تمت إعادة إرسال رمز التحقق بنجاح.');
+      _startTimer();
+    } else {
+      _showMessage('تعذرت إعادة إرسال رمز التحقق. حاول مجددًا.');
+    }
+  }
+
+  void _showMessage(String message) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            message,
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
   }
 
   String get _formattedTime {
@@ -452,28 +485,18 @@ class _ResendCodeSectionState extends State<_ResendCodeSection> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(
-          'لم تستلم الرمز؟',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: AppColors.muted,
-                fontSize: 17,
-              ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
         TextButton(
           key: const ValueKey('otp_resend_button'),
-          onPressed: _canResend ? _resend : null,
+          onPressed: _isResending ? null : _resend,
           style: TextButton.styleFrom(
             foregroundColor: AppColors.gold,
-            disabledForegroundColor: AppColors.gold,
+            disabledForegroundColor: AppColors.muted,
             padding: EdgeInsets.zero,
-            minimumSize: const Size(0, 36),
+            minimumSize: const Size(0, 44),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             textStyle: const TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w600,
-              decoration: TextDecoration.underline,
             ),
           ),
           child: _isResending
@@ -485,13 +508,67 @@ class _ResendCodeSectionState extends State<_ResendCodeSection> {
                     color: AppColors.gold,
                   ),
                 )
-              : Text(
-                  _secondsRemaining == 0
-                      ? 'إعادة إرسال الرمز'
-                      : 'إعادة إرسال الرمز ($_formattedTime)',
+              : Text.rich(
+                  TextSpan(
+                    children: [
+                      const TextSpan(
+                        text: 'لم تستلم الرمز؟ ',
+                        style: TextStyle(color: AppColors.muted),
+                      ),
+                      TextSpan(
+                        text: _secondsRemaining == 0
+                            ? 'إعادة الإرسال'
+                            : 'إعادة الإرسال ($_formattedTime)',
+                        style: const TextStyle(
+                          color: AppColors.gold,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
         ),
       ],
+    );
+  }
+}
+
+class _OtpDigitsFormatter extends TextInputFormatter {
+  const _OtpDigitsFormatter(this.maxLength);
+
+  final int maxLength;
+
+  static const _arabicIndicDigits = '٠١٢٣٤٥٦٧٨٩';
+  static const _easternArabicDigits = '۰۱۲۳۴۵۶۷۸۹';
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final normalized = StringBuffer();
+
+    for (final rune in newValue.text.runes) {
+      final character = String.fromCharCode(rune);
+      final westernDigit = int.tryParse(character);
+      final arabicIndicDigit = _arabicIndicDigits.indexOf(character);
+      final easternArabicDigit = _easternArabicDigits.indexOf(character);
+
+      if (westernDigit != null) {
+        normalized.write(westernDigit);
+      } else if (arabicIndicDigit >= 0) {
+        normalized.write(arabicIndicDigit);
+      } else if (easternArabicDigit >= 0) {
+        normalized.write(easternArabicDigit);
+      }
+
+      if (normalized.length >= maxLength) break;
+    }
+
+    final text = normalized.toString();
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
     );
   }
 }

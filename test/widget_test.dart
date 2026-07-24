@@ -1,19 +1,36 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:electronic_municipality/app/app.dart';
 
 void main() {
-  testWidgets('app starts and shows splash content',
-      (WidgetTester tester) async {
-    await tester.pumpWidget(const AppRoot());
+  testWidgets(
+    'app shows splash then navigates to login',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(const AppRoot());
 
-    expect(find.text('الخدمات الإلكترونية'), findsWidgets);
-  });
+      // شاشة البداية تظهر أولًا.
+      expect(find.text('الخدمات الإلكترونية'), findsOneWidget);
+      expect(find.text('الجمهورية العربية السورية'), findsOneWidget);
+
+      // محاكاة مرور مدة شاشة البداية البالغة ثانيتين.
+      await tester.pump(const Duration(seconds: 2));
+
+      // إكمال حركة الانتقال إلى شاشة تسجيل الدخول.
+      await tester.pumpAndSettle();
+
+      expect(find.text('تسجيل الدخول'), findsWidgets);
+      expect(
+        find.text('رقم الهاتف أو البريد الإلكتروني'),
+        findsOneWidget,
+      );
+      expect(find.text('هل نسيت كلمة المرور؟'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'إنشاء حساب جديد',
+          findRichText: true,
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 }

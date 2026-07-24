@@ -70,8 +70,7 @@ void main() {
     'password recovery forwards contact and verifies its OTP',
     (WidgetTester tester) async {
       const contact = 'citizen@example.sy';
-      final expectedCode =
-          (contact.hashCode.abs() % 9000 + 1000).toString();
+      const expectedCode = '1234';
 
       await tester.pumpWidget(const AppRoot());
       await tester.pump(const Duration(seconds: 3));
@@ -149,6 +148,47 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('تعيين كلمة مرور جديدة'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'forgot password leaves loading state after returning from OTP',
+    (WidgetTester tester) async {
+      const contact = 'citizen@example.sy';
+
+      await tester.pumpWidget(const AppRoot());
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('نسيت كلمة المرور؟'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('forgot_contact_field')),
+        contact,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('forgot_send_code_button')),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('otp_back_button')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('نسيت كلمة المرور'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(
+        tester
+            .widget<TextButton>(
+              find.byKey(const ValueKey('forgot_back_button')),
+            )
+            .onPressed,
+        isNotNull,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('forgot_back_button')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('تسجيل الدخول'), findsWidgets);
     },
   );
 

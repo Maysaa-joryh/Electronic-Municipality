@@ -7,6 +7,24 @@ import '../../../../core/di.dart';
 import '../../../../core/repositories/auth_repository.dart';
 import '../../../../shared/widgets/municipality_widgets.dart';
 
+const double _signupFieldMaxWidth = 241;
+const double _signupFieldHeight = 46;
+const double _signupFieldFontSize = 16;
+const BorderRadius _signupFieldRadius = BorderRadius.all(
+  Radius.circular(10),
+);
+const TextStyle _signupFieldLabelStyle = TextStyle(
+  color: Color(0xFF1B1C19),
+  fontSize: _signupFieldFontSize,
+  height: 1.5,
+  fontWeight: FontWeight.w400,
+);
+const TextStyle _signupFieldTextStyle = TextStyle(
+  color: Color(0xFF1B1C19),
+  fontSize: _signupFieldFontSize,
+  height: 1.2,
+);
+
 class AuthSignupScreen extends StatefulWidget {
   const AuthSignupScreen({super.key});
 
@@ -34,6 +52,7 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
 
   final _formKey = GlobalKey<FormState>();
   final _fullNameController = TextEditingController();
+  final _nationalIdController = TextEditingController();
   final _birthDateController = TextEditingController();
   final _birthPlaceController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -56,6 +75,7 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
   @override
   void dispose() {
     _fullNameController.dispose();
+    _nationalIdController.dispose();
     _birthDateController.dispose();
     _birthPlaceController.dispose();
     _phoneController.dispose();
@@ -109,6 +129,7 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
 
     final registration = CitizenRegistration(
       fullName: _fullNameController.text.trim(),
+      nationalId: _nationalIdController.text.trim(),
       dateOfBirth: _birthDate!,
       placeOfBirth: _birthPlaceController.text.trim(),
       governorate: _selectedGovernorate!,
@@ -166,6 +187,15 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
 
   String? _validateRequired(String? value, String message) {
     return value == null || value.trim().isEmpty ? message : null;
+  }
+
+  String? _validateNationalId(String? value) {
+    final nationalId = value?.trim() ?? '';
+    if (nationalId.isEmpty) return 'الرقم الوطني مطلوب';
+    if (!RegExp(r'^\d{11}$').hasMatch(nationalId)) {
+      return 'يجب أن يتكون الرقم الوطني من 11 رقماً';
+    }
+    return null;
   }
 
   String? _validatePhone(String? value) {
@@ -231,12 +261,31 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                                     label: 'الاسم الكامل (كما في الهوية)',
                                     hint: 'الاسم الثلاثي',
                                     controller: _fullNameController,
-                                    maxWidth: 241,
+                                    maxWidth: _signupFieldMaxWidth,
                                     validator: _validateFullName,
                                     autofillHints: const [
                                       AutofillHints.name,
                                     ],
                                     textInputAction: TextInputAction.next,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _SignupTextField(
+                                    fieldKey: const ValueKey(
+                                      'signup_national_id_field',
+                                    ),
+                                    label: 'الرقم الوطني',
+                                    hint: '00000000000',
+                                    controller: _nationalIdController,
+                                    maxWidth: _signupFieldMaxWidth,
+                                    textDirection: TextDirection.ltr,
+                                    textAlign: TextAlign.left,
+                                    keyboardType: TextInputType.number,
+                                    textInputAction: TextInputAction.next,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                      LengthLimitingTextInputFormatter(11),
+                                    ],
+                                    validator: _validateNationalId,
                                   ),
                                   const SizedBox(height: 16),
                                   _SignupDateField(
@@ -254,7 +303,7 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                                     label: 'مكان الولادة',
                                     hint: 'المحافظة - المدينة',
                                     controller: _birthPlaceController,
-                                    maxWidth: 241,
+                                    maxWidth: _signupFieldMaxWidth,
                                     validator: (value) => _validateRequired(
                                       value,
                                       'مكان الولادة مطلوب',
@@ -281,7 +330,7 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                                     value: _selectedGovernorate,
                                     items: _governorateMunicipalities.keys
                                         .toList(growable: false),
-                                    maxWidth: 149,
+                                    maxWidth: _signupFieldMaxWidth,
                                     onChanged: _isLoading
                                         ? null
                                         : (value) {
@@ -303,7 +352,7 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                                     hint: 'اختر البلدية...',
                                     value: _selectedMunicipality,
                                     items: _municipalities,
-                                    maxWidth: 134,
+                                    maxWidth: _signupFieldMaxWidth,
                                     onChanged: _isLoading ||
                                             _selectedGovernorate == null
                                         ? null
@@ -578,7 +627,7 @@ class _SignupTextField extends StatelessWidget {
     required this.controller,
     required this.maxWidth,
     required this.validator,
-    this.inputHeight = 42,
+    this.inputHeight = _signupFieldHeight,
     this.obscureText = false,
     this.autocorrect = true,
     this.enableSuggestions = true,
@@ -617,12 +666,7 @@ class _SignupTextField extends StatelessWidget {
         Text(
           label,
           textAlign: TextAlign.start,
-          style: const TextStyle(
-            color: Color(0xFF1B1C19),
-            fontSize: 16,
-            height: 1.5,
-            fontWeight: FontWeight.w400,
-          ),
+          style: _signupFieldLabelStyle,
         ),
         Align(
           alignment: Alignment.centerRight,
@@ -643,11 +687,7 @@ class _SignupTextField extends StatelessWidget {
               onFieldSubmitted: onFieldSubmitted,
               textDirection: textDirection,
               textAlign: textAlign,
-              style: const TextStyle(
-                color: Color(0xFF1B1C19),
-                fontSize: 16,
-                height: 1.2,
-              ),
+              style: _signupFieldTextStyle,
               decoration: _signupInputDecoration(
                 hint: hint,
                 height: inputHeight,
@@ -674,28 +714,20 @@ class _SignupDateField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(top: 9),
-            child: Text(
-              'تاريخ الميلاد',
-              textAlign: TextAlign.start,
-              style: TextStyle(
-                color: Color(0xFF1B1C19),
-                fontSize: 16,
-                height: 1.5,
-              ),
-            ),
-          ),
+        const Text(
+          'تاريخ الميلاد',
+          textAlign: TextAlign.start,
+          style: _signupFieldLabelStyle,
         ),
-        const SizedBox(width: 4),
-        Flexible(
-          flex: 2,
+        Align(
+          alignment: Alignment.centerRight,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 174),
+            constraints: const BoxConstraints(
+              maxWidth: _signupFieldMaxWidth,
+            ),
             child: TextFormField(
               key: const ValueKey('signup_birth_date_field'),
               controller: controller,
@@ -704,14 +736,10 @@ class _SignupDateField extends StatelessWidget {
               onTap: onTap,
               textDirection: TextDirection.ltr,
               textAlign: TextAlign.left,
-              style: const TextStyle(
-                color: Color(0xFF1B1C19),
-                fontSize: 16,
-                height: 1.2,
-              ),
+              style: _signupFieldTextStyle,
               decoration: _signupInputDecoration(
                 hint: 'mm/dd/yyyy',
-                height: 42,
+                height: _signupFieldHeight,
                 hintDirection: TextDirection.ltr,
               ).copyWith(
                 suffixIcon: const Icon(
@@ -761,11 +789,7 @@ class _SignupDropdownField extends StatelessWidget {
         Text(
           label,
           textAlign: TextAlign.start,
-          style: const TextStyle(
-            color: Color(0xFF1B1C19),
-            fontSize: 16,
-            height: 1.5,
-          ),
+          style: _signupFieldLabelStyle,
         ),
         Align(
           alignment: Alignment.centerRight,
@@ -784,20 +808,12 @@ class _SignupDropdownField extends StatelessWidget {
                 size: 22,
               ),
               dropdownColor: Colors.white,
-              style: const TextStyle(
-                color: Color(0xFF1B1C19),
-                fontSize: 16,
-                height: 1.5,
-              ),
+              style: _signupFieldTextStyle,
               hint: Text(
                 hint,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Color(0xFF1B1C19),
-                  fontSize: 16,
-                  height: 1.5,
-                ),
+                style: _signupFieldTextStyle,
               ),
               items: items
                   .map(
@@ -813,11 +829,14 @@ class _SignupDropdownField extends StatelessWidget {
                   .toList(growable: false),
               decoration: _signupInputDecoration(
                 hint: '',
-                height: 42,
+                height: _signupFieldHeight,
                 hintDirection: TextDirection.rtl,
               ).copyWith(
-                contentPadding: const EdgeInsetsDirectional.only(
-                  start: 12,
+                contentPadding: const EdgeInsetsDirectional.fromSTEB(
+                  12,
+                  10,
+                  8,
+                  10,
                 ),
               ),
             ),
@@ -873,10 +892,10 @@ class _SignupOptions extends StatelessWidget {
             enabled: enabled,
             showError: showTermsError,
             onChanged: onTermsChanged,
-            label: Text.rich(
+            label: const Text.rich(
               TextSpan(
                 text: 'أوافق على ',
-                children: const [
+                children: [
                   TextSpan(
                     text: 'الشروط والأحكام',
                     style: TextStyle(
@@ -887,7 +906,7 @@ class _SignupOptions extends StatelessWidget {
                   TextSpan(text: ' وسياسة الخصوصية الخاصة بالبوابة.'),
                 ],
               ),
-              style: const TextStyle(
+              style: TextStyle(
                 color: Color(0xFF1B1C19),
                 fontSize: 16,
                 height: 1.5,
@@ -1113,55 +1132,54 @@ InputDecoration _signupInputDecoration({
   required double height,
   required TextDirection hintDirection,
 }) {
-  const fieldRadius = BorderRadius.all(
-    Radius.circular(9),
-  );
-  const borderSide = BorderSide(
-    color: Color(0xFF6B7280),
-  );
-
+  const borderSide = BorderSide(color: Color(0xFFCBD2CE));
   const errorBorderSide = BorderSide(
     color: AppColors.danger,
+    width: 1.25,
   );
+
   return InputDecoration(
     hintText: hint,
     hintTextDirection: hintDirection,
     hintStyle: const TextStyle(
       color: Color(0xFF6B7280),
-      fontSize: 16,
+      fontSize: _signupFieldFontSize,
       height: 1.2,
       fontWeight: FontWeight.w400,
     ),
     isDense: true,
     filled: true,
-    fillColor: Colors.white,
+    fillColor: const Color(0xFFFFFEFC),
     constraints: BoxConstraints(minHeight: height),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+    contentPadding: const EdgeInsets.symmetric(
+      horizontal: 14,
+      vertical: 10,
+    ),
     errorMaxLines: 2,
     border: const OutlineInputBorder(
-      borderRadius: fieldRadius,
+      borderRadius: _signupFieldRadius,
       borderSide: borderSide,
     ),
     enabledBorder: const OutlineInputBorder(
-      borderRadius: fieldRadius,
+      borderRadius: _signupFieldRadius,
       borderSide: borderSide,
     ),
     focusedBorder: const OutlineInputBorder(
-      borderRadius: fieldRadius,
+      borderRadius: _signupFieldRadius,
       borderSide: BorderSide(
         color: Color(0xFF775A19),
-        width: 1.5,
+        width: 1.75,
       ),
     ),
     errorBorder: const OutlineInputBorder(
-      borderRadius: fieldRadius,
+      borderRadius: _signupFieldRadius,
       borderSide: errorBorderSide,
     ),
     focusedErrorBorder: const OutlineInputBorder(
-      borderRadius: fieldRadius,
+      borderRadius: _signupFieldRadius,
       borderSide: BorderSide(
         color: AppColors.danger,
-        width: 1.5,
+        width: 1.75,
       ),
     ),
   );

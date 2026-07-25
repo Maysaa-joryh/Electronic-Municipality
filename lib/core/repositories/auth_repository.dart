@@ -1,6 +1,7 @@
 class CitizenRegistration {
   const CitizenRegistration({
     required this.fullName,
+    required this.nationalId,
     required this.dateOfBirth,
     required this.placeOfBirth,
     required this.governorate,
@@ -13,6 +14,7 @@ class CitizenRegistration {
   });
 
   final String fullName;
+  final String nationalId;
   final DateTime dateOfBirth;
   final String placeOfBirth;
   final String governorate;

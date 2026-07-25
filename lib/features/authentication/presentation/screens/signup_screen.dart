@@ -197,8 +197,7 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
           const CustomPaint(painter: _SignupBackgroundPainter()),
           SafeArea(
             child: SingleChildScrollView(
-              keyboardDismissBehavior:
-                  ScrollViewKeyboardDismissBehavior.onDrag,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.fromLTRB(1.5, 0, 1.5, 29),
               child: Center(
                 child: ConstrainedBox(
@@ -223,15 +222,13 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                               icon: Icons.badge_outlined,
                               minHeight: 300,
                               child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.stretch,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
                                   _SignupTextField(
                                     fieldKey: const ValueKey(
                                       'signup_full_name_field',
                                     ),
-                                    label:
-                                        'الاسم الكامل (كما في الهوية)',
+                                    label: 'الاسم الكامل (كما في الهوية)',
                                     hint: 'الاسم الثلاثي',
                                     controller: _fullNameController,
                                     maxWidth: 241,
@@ -239,8 +236,7 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                                     autofillHints: const [
                                       AutofillHints.name,
                                     ],
-                                    textInputAction:
-                                        TextInputAction.next,
+                                    textInputAction: TextInputAction.next,
                                   ),
                                   const SizedBox(height: 16),
                                   _SignupDateField(
@@ -259,13 +255,11 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                                     hint: 'المحافظة - المدينة',
                                     controller: _birthPlaceController,
                                     maxWidth: 241,
-                                    validator: (value) =>
-                                        _validateRequired(
+                                    validator: (value) => _validateRequired(
                                       value,
                                       'مكان الولادة مطلوب',
                                     ),
-                                    textInputAction:
-                                        TextInputAction.next,
+                                    textInputAction: TextInputAction.next,
                                   ),
                                 ],
                               ),
@@ -276,8 +270,7 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                               icon: Icons.location_on_outlined,
                               minHeight: 242,
                               child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.stretch,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
                                   _SignupDropdownField(
                                     fieldKey: const ValueKey(
@@ -298,9 +291,8 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                                               _errorMessage = null;
                                             });
                                           },
-                                    validator: (value) => value == null
-                                        ? 'اختر المحافظة'
-                                        : null,
+                                    validator: (value) =>
+                                        value == null ? 'اختر المحافظة' : null,
                                   ),
                                   const SizedBox(height: 16),
                                   _SignupDropdownField(
@@ -321,9 +313,8 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                                               _errorMessage = null;
                                             });
                                           },
-                                    validator: (value) => value == null
-                                        ? 'اختر البلدية'
-                                        : null,
+                                    validator: (value) =>
+                                        value == null ? 'اختر البلدية' : null,
                                   ),
                                 ],
                               ),
@@ -334,8 +325,7 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                               icon: Icons.lock_outline_rounded,
                               minHeight: 324,
                               child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.stretch,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
                                   _SignupTextField(
                                     fieldKey: const ValueKey(
@@ -349,14 +339,12 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                                     textDirection: TextDirection.ltr,
                                     textAlign: TextAlign.left,
                                     keyboardType: TextInputType.phone,
-                                    textInputAction:
-                                        TextInputAction.next,
+                                    textInputAction: TextInputAction.next,
                                     autofillHints: const [
                                       AutofillHints.telephoneNumber,
                                     ],
                                     inputFormatters: [
-                                      FilteringTextInputFormatter
-                                          .digitsOnly,
+                                      FilteringTextInputFormatter.digitsOnly,
                                       LengthLimitingTextInputFormatter(10),
                                     ],
                                     validator: _validatePhone,
@@ -366,18 +354,15 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                                     fieldKey: const ValueKey(
                                       'signup_email_field',
                                     ),
-                                    label:
-                                        'البريد الإلكتروني (اختياري)',
+                                    label: 'البريد الإلكتروني (اختياري)',
                                     hint: 'example@mail.sy',
                                     controller: _emailController,
                                     maxWidth: 253,
                                     inputHeight: 45,
                                     textDirection: TextDirection.ltr,
                                     textAlign: TextAlign.left,
-                                    keyboardType:
-                                        TextInputType.emailAddress,
-                                    textInputAction:
-                                        TextInputAction.next,
+                                    keyboardType: TextInputType.emailAddress,
+                                    textInputAction: TextInputAction.next,
                                     autofillHints: const [
                                       AutofillHints.email,
                                     ],
@@ -398,13 +383,11 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                                     autofillHints: const [
                                       AutofillHints.newPassword,
                                     ],
-                                    textInputAction:
-                                        TextInputAction.done,
+                                    textInputAction: TextInputAction.done,
                                     onFieldSubmitted: (_) {
                                       if (!_isLoading) _submit();
                                     },
-                                    validator: (value) =>
-                                        _validateRequired(
+                                    validator: (value) => _validateRequired(
                                       value,
                                       'كلمة المرور مطلوبة',
                                     ),
@@ -890,10 +873,10 @@ class _SignupOptions extends StatelessWidget {
             enabled: enabled,
             showError: showTermsError,
             onChanged: onTermsChanged,
-            label: const Text.rich(
+            label: Text.rich(
               TextSpan(
                 text: 'أوافق على ',
-                children: [
+                children: const [
                   TextSpan(
                     text: 'الشروط والأحكام',
                     style: TextStyle(
@@ -904,7 +887,7 @@ class _SignupOptions extends StatelessWidget {
                   TextSpan(text: ' وسياسة الخصوصية الخاصة بالبوابة.'),
                 ],
               ),
-              style: TextStyle(
+              style: const TextStyle(
                 color: Color(0xFF1B1C19),
                 fontSize: 16,
                 height: 1.5,
@@ -968,9 +951,8 @@ class _SignupCheckboxRow extends StatelessWidget {
                   activeColor: const Color(0xFF00261E),
                   checkColor: Colors.white,
                   side: BorderSide(
-                    color: showError
-                        ? AppColors.danger
-                        : const Color(0xFFC0C8C4),
+                    color:
+                        showError ? AppColors.danger : const Color(0xFFC0C8C4),
                   ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(2),
@@ -1131,9 +1113,16 @@ InputDecoration _signupInputDecoration({
   required double height,
   required TextDirection hintDirection,
 }) {
-  const borderSide = BorderSide(color: Color(0xFF6B7280));
-  const errorBorderSide = BorderSide(color: AppColors.danger);
+  const fieldRadius = BorderRadius.all(
+    Radius.circular(9),
+  );
+  const borderSide = BorderSide(
+    color: Color(0xFF6B7280),
+  );
 
+  const errorBorderSide = BorderSide(
+    color: AppColors.danger,
+  );
   return InputDecoration(
     hintText: hint,
     hintTextDirection: hintDirection,
@@ -1150,24 +1139,30 @@ InputDecoration _signupInputDecoration({
     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
     errorMaxLines: 2,
     border: const OutlineInputBorder(
-      borderRadius: BorderRadius.zero,
+      borderRadius: fieldRadius,
       borderSide: borderSide,
     ),
     enabledBorder: const OutlineInputBorder(
-      borderRadius: BorderRadius.zero,
+      borderRadius: fieldRadius,
       borderSide: borderSide,
     ),
     focusedBorder: const OutlineInputBorder(
-      borderRadius: BorderRadius.zero,
-      borderSide: BorderSide(color: Color(0xFF775A19), width: 1.5),
+      borderRadius: fieldRadius,
+      borderSide: BorderSide(
+        color: Color(0xFF775A19),
+        width: 1.5,
+      ),
     ),
     errorBorder: const OutlineInputBorder(
-      borderRadius: BorderRadius.zero,
+      borderRadius: fieldRadius,
       borderSide: errorBorderSide,
     ),
     focusedErrorBorder: const OutlineInputBorder(
-      borderRadius: BorderRadius.zero,
-      borderSide: BorderSide(color: AppColors.danger, width: 1.5),
+      borderRadius: fieldRadius,
+      borderSide: BorderSide(
+        color: AppColors.danger,
+        width: 1.5,
+      ),
     ),
   );
 }

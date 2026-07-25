@@ -199,7 +199,10 @@ class QuickServiceCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       child: Container(
         height: 148,
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 18,
+          vertical: 16,
+        ),
         decoration: BoxDecoration(
           color: AppColors.surfaceMuted,
           border: Border.all(color: const Color(0xFFD9DED8)),

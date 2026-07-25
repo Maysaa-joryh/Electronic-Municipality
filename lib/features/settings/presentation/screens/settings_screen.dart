@@ -53,7 +53,10 @@ class _SettingsTile extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
         child: AppPanel(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 18,
+              vertical: 16,
+            ),
             child: Row(children: [
               CircleIcon(icon: icon, iconColor: AppColors.primary),
               const SizedBox(width: 14),

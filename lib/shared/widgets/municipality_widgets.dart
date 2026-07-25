@@ -660,7 +660,10 @@ class UploadBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 18,
+        vertical: 16,
+      ),
       decoration: BoxDecoration(
           color: AppColors.background,
           borderRadius: BorderRadius.circular(8),
@@ -691,7 +694,10 @@ class PasswordRulesBox extends StatelessWidget {
   Widget build(BuildContext context) {
     const rules = ['8 أحرف على الأقل', 'حرف كبير وحرف صغير', 'رقم أو رمز خاص'];
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.symmetric(
+  horizontal: 18,
+  vertical: 16,
+),
       decoration: BoxDecoration(
           color: AppColors.surfaceMuted,
           borderRadius: BorderRadius.circular(8),

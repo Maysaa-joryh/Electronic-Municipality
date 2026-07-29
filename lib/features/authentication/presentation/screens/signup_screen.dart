@@ -496,7 +496,9 @@ class _SignupCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: const Color(0xFFC0C8C4)),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: const BorderRadius.all(
+          Radius.circular(18.0),
+        ),
         boxShadow: const [
           BoxShadow(
             color: Color(0x0A000000),

@@ -1,6 +1,26 @@
-import 'package:electronic_municipality/features/authentication/data/auth_repository_fake.dart';
+import 'package:electronic_municipality/core/network/api_client.dart';
+import 'package:electronic_municipality/core/repositories/auth_repository.dart';
+import 'package:electronic_municipality/core/storage/token_storage.dart';
+import 'package:electronic_municipality/features/authentication/data/auth_remote_data_source.dart';
+import 'package:electronic_municipality/features/authentication/data/auth_repository_api.dart';
 
-/// Simple development DI container. Replace with provider/get_it later.
+/// Dependencies used by the running application.
+///
+/// Tests can continue using AuthRepositoryFake directly.
 class DI {
-  static final auth = AuthRepositoryFake();
+  DI._();
+
+  static final TokenStorage tokenStorage = TokenStorage();
+
+  static final ApiClient apiClient = ApiClient(
+    tokenStorage: tokenStorage,
+  );
+
+  static final AuthRemoteDataSource authRemoteDataSource =
+      AuthRemoteDataSource(apiClient);
+
+  static final AuthRepository auth = AuthRepositoryApi(
+    remoteDataSource: authRemoteDataSource,
+    tokenStorage: tokenStorage,
+  );
 }

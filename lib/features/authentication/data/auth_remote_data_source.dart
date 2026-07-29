@@ -5,6 +5,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
 import 'models/auth_session_model.dart';
 import 'models/auth_user_model.dart';
+import '../../../core/network/api_endpoints.dart';
 
 enum CitizenGender { male, female }
 
@@ -123,8 +124,7 @@ class AuthRemoteDataSource {
     final data = _nullableMap(envelope['data']);
     final resetToken = data?['reset_token']?.toString().trim();
     return ResetOtpVerification(
-      resetToken:
-          resetToken == null || resetToken.isEmpty ? null : resetToken,
+      resetToken: resetToken == null || resetToken.isEmpty ? null : resetToken,
     );
   }
 

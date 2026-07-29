@@ -47,6 +47,7 @@ void main() {
         dateOfBirth: DateTime(2000),
         placeOfBirth: 'دمشق',
         governorate: 'دمشق',
+        nationalId: '01234567890',
         municipality: 'بلدية دمشق',
         phone: phone,
         email: '',

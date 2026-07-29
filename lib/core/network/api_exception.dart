@@ -30,6 +30,7 @@ class ApiException implements Exception {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.sendTimeout:
       case DioExceptionType.receiveTimeout:
+      case DioExceptionType.transformTimeout:
         return ApiException(
           kind: ApiExceptionKind.timeout,
           message: 'انتهت مهلة الاتصال بالخادم. حاول مرة أخرى.',

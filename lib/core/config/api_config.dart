@@ -51,25 +51,10 @@ class ApiConfig {
       );
     }
 
-    final normalizedPath =
-        uri.path.endsWith('/') ? uri.path : '${uri.path}/';
+    final normalizedPath = uri.path.endsWith('/') ? uri.path : '${uri.path}/';
 
     return uri
         .replace(path: normalizedPath, query: null, fragment: null)
         .toString();
   }
-}
-
-class ApiEndpoints {
-  ApiEndpoints._();
-
-  static const String login = 'auth/login';
-  static const String registerCitizen = 'auth/register-citizen';
-  static const String forgotPassword = 'auth/forgot-password';
-  static const String verifyResetOtp = 'auth/verify-reset-otp';
-  static const String resetPassword = 'auth/reset-password';
-  static const String me = 'auth/me';
-  static const String logout = 'auth/logout';
-  static const String changeTemporaryPassword =
-      'auth/change-temporary-password';
 }

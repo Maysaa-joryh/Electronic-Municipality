@@ -6,7 +6,7 @@ import '../../../../app/design_system.dart';
 import '../../../../app/router.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/di.dart';
-import '../../../../core/repositories/auth_repository.dart';
+import '../../../../core/network/api_exception.dart';
 import '../../../../shared/widgets/municipality_widgets.dart';
 import '../../../../shared/widgets/otp_input.dart';
 
@@ -14,24 +14,15 @@ class AuthOtpScreen extends StatefulWidget {
   const AuthOtpScreen({
     super.key,
     required this.contact,
-    this.registration,
   });
 
   factory AuthOtpScreen.fromRouteArguments(Object? arguments) {
-    if (arguments is CitizenRegistration) {
-      return AuthOtpScreen(
-        contact: arguments.phone,
-        registration: arguments,
-      );
-    }
-
     return AuthOtpScreen(
       contact: arguments is String ? arguments : '',
     );
   }
 
   final String contact;
-  final CitizenRegistration? registration;
 
   @override
   State<AuthOtpScreen> createState() => _AuthOtpScreenState();
@@ -41,8 +32,6 @@ class _AuthOtpScreenState extends State<AuthOtpScreen> {
   String _otpCode = '';
   bool _isLoading = false;
   String? _errorMessage;
-
-  bool get _sentToEmail => widget.contact.contains('@');
 
   Future<void> _verifyOtp() async {
     FocusManager.instance.primaryFocus?.unfocus();
@@ -77,30 +66,18 @@ class _AuthOtpScreenState extends State<AuthOtpScreen> {
         return;
       }
 
-      if (widget.registration != null) {
-        await DI.auth.registerCitizen(
-          registration: widget.registration!,
-        );
-
-        if (!mounted) return;
-
-        Navigator.of(context).pushNamedAndRemoveUntil(
-          AppRoutes.shell,
-          (route) => false,
-        );
-        return;
-      }
-
       await Navigator.of(context).pushNamed(
         AppRoutes.reset,
         arguments: widget.contact,
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      debugPrint('OTP VERIFY ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
       if (mounted) {
         setState(() {
-          _errorMessage = widget.registration == null
-              ? 'تعذر التحقق من الرمز. حاول مرة أخرى.'
-              : 'تعذر إكمال إنشاء الحساب. حاول مرة أخرى.';
+          _errorMessage = error is ApiException
+              ? error.message
+              : 'تعذر التحقق من الرمز. حاول مرة أخرى.';
         });
       }
     } finally {
@@ -120,10 +97,16 @@ class _AuthOtpScreenState extends State<AuthOtpScreen> {
         );
       }
       return true;
-    } catch (_) {
+    } catch (error, stackTrace) {
+      debugPrint('OTP RESEND ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('فشل إعادة إرسال الرمز')),
+          SnackBar(
+            content: Text(
+              error is ApiException ? error.message : 'فشل إعادة إرسال الرمز',
+            ),
+          ),
         );
       }
       return false;
@@ -139,7 +122,7 @@ class _AuthOtpScreenState extends State<AuthOtpScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final destination = _sentToEmail ? 'بريدك الإلكتروني' : 'هاتفك';
+    const destination = 'بريدك الإلكتروني';
 
     return AuthCenterScaffold(
       verticalPadding: EdgeInsets.zero,

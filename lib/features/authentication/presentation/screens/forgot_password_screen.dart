@@ -4,6 +4,7 @@ import '../../../../app/design_system.dart';
 import '../../../../app/router.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/di.dart';
+import '../../../../core/network/api_exception.dart';
 import '../../../../shared/widgets/municipality_widgets.dart';
 
 class AuthForgotPasswordScreen extends StatefulWidget {
@@ -43,10 +44,18 @@ class _AuthForgotPasswordScreenState extends State<AuthForgotPasswordScreen> {
         AppRoutes.otp,
         arguments: contact,
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      debugPrint('FORGOT PASSWORD ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('فشل إرسال الرمز. حاول مرة أخرى.')),
+          SnackBar(
+            content: Text(
+              error is ApiException
+                  ? error.message
+                  : 'فشل إرسال الرمز. حاول مرة أخرى.',
+            ),
+          ),
         );
       }
     } finally {
@@ -87,7 +96,7 @@ class _AuthForgotPasswordScreenState extends State<AuthForgotPasswordScreen> {
               ),
               const SizedBox(height: AppSpacing.md),
               Text(
-                'أدخل رقم هاتفك أو بريدك الإلكتروني لاسترداد كلمة المرور',
+                'أدخل بريدك الإلكتروني لاسترداد كلمة المرور',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: AppColors.muted,
@@ -191,7 +200,7 @@ class _ContactField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'رقم الهاتف أو البريد الإلكتروني',
+          'البريد الإلكتروني',
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                 color: AppColors.text,
                 fontWeight: FontWeight.w700,
@@ -203,16 +212,17 @@ class _ContactField extends StatelessWidget {
           controller: controller,
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return 'رقم الهاتف أو البريد الإلكتروني مطلوب';
+              return 'البريد الإلكتروني مطلوب';
             }
-            return null;
+            final email = value.trim();
+            final isValid =
+                RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email);
+            return isValid ? null : 'أدخل بريداً إلكترونياً صحيحاً';
           },
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.done,
           autofillHints: const [
-            AutofillHints.username,
             AutofillHints.email,
-            AutofillHints.telephoneNumber,
           ],
           onFieldSubmitted: onSubmitted,
           textDirection: TextDirection.rtl,

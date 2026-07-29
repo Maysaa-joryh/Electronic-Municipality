@@ -5,6 +5,7 @@ class AppRoutes {
   static const forgot = '/forgot-password';
   static const otp = '/otp';
   static const reset = '/reset-password';
+  static const changeTemporaryPassword = '/change-temporary-password';
   static const shell = '/app';
   static const profile = '/profile';
 }

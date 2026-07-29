@@ -14,4 +14,3 @@ Future<void> tapWhenVisible(
   await tester.pumpAndSettle();
   await tester.tap(finder);
 }
-

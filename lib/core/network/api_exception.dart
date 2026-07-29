@@ -6,6 +6,7 @@ enum ApiExceptionKind {
   unauthorized,
   forbidden,
   notFound,
+  conflict,
   validation,
   rateLimited,
   server,
@@ -23,6 +24,7 @@ class ApiException implements Exception {
     this.statusCode,
     this.errors = const {},
     this.cause,
+    this.technicalMessage,
   });
 
   factory ApiException.fromDioException(DioException exception) {
@@ -68,18 +70,21 @@ class ApiException implements Exception {
   factory ApiException.invalidResponse({
     String message = 'أعاد الخادم استجابة غير صالحة.',
     Object? cause,
+    String? technicalMessage,
   }) {
     return ApiException(
       kind: ApiExceptionKind.invalidResponse,
       message: message,
       cause: cause,
+      technicalMessage: technicalMessage,
     );
   }
 
-  factory ApiException.configuration(String message) {
+  factory ApiException.configuration(String technicalMessage) {
     return ApiException(
       kind: ApiExceptionKind.configuration,
-      message: message,
+      message: 'تعذر إعداد الاتصال بالخادم.',
+      technicalMessage: technicalMessage,
     );
   }
 
@@ -111,6 +116,9 @@ class ApiException implements Exception {
   final Map<String, List<String>> errors;
   final Object? cause;
 
+  /// Kept for debug logging only. Never render this value in the UI.
+  final String? technicalMessage;
+
   bool get isUnauthorized => kind == ApiExceptionKind.unauthorized;
   bool get isValidation => kind == ApiExceptionKind.validation;
 
@@ -125,26 +133,26 @@ class ApiException implements Exception {
     final response = exception.response;
     final statusCode = response?.statusCode;
     final body = _asStringKeyedMap(response?.data);
-    final errors = _normalizeErrors(body?['errors']);
+    final rawErrors = _normalizeErrors(body?['errors']);
     final serverMessage = _nonEmptyString(body?['message']);
-    String? validationMessage;
-
-    for (final messages in errors.values) {
-      if (messages.isNotEmpty) {
-        validationMessage = messages.first;
-        break;
-      }
-    }
-
     final kind = _kindForStatus(statusCode);
-    final fallbackMessage = _fallbackMessageFor(kind);
+    final path = exception.requestOptions.path;
+    final errors = _userFacingValidationErrors(rawErrors);
 
     return ApiException(
       kind: kind,
-      message: serverMessage ?? validationMessage ?? fallbackMessage,
+      message: _userMessageFor(
+        kind: kind,
+        path: path,
+        errors: errors,
+      ),
       statusCode: statusCode,
       errors: errors,
       cause: exception,
+      technicalMessage: _technicalMessage(
+        responseData: response?.data,
+        serverMessage: serverMessage,
+      ),
     );
   }
 
@@ -189,10 +197,190 @@ class ApiException implements Exception {
     return normalized.isEmpty ? null : normalized;
   }
 
+  static Map<String, List<String>> _userFacingValidationErrors(
+    Map<String, List<String>> rawErrors,
+  ) {
+    if (rawErrors.isEmpty) return const {};
+
+    final result = <String, List<String>>{};
+    for (final entry in rawErrors.entries) {
+      result[entry.key] = <String>[
+        _validationMessageFor(
+          field: entry.key,
+          rawMessages: entry.value,
+        ),
+      ];
+    }
+
+    return Map<String, List<String>>.unmodifiable(result);
+  }
+
+  static String _validationMessageFor({
+    required String field,
+    required List<String> rawMessages,
+  }) {
+    final label = _fieldLabel(field);
+    final normalized = rawMessages.join(' ').toLowerCase();
+    final isIdentityPhoto =
+        field == 'front_id_photo' || field == 'back_id_photo';
+
+    if (_containsAny(normalized, const [
+      'credentials',
+      'بيانات الاعتماد',
+      'بيانات الدخول',
+    ])) {
+      return 'بيانات تسجيل الدخول غير صحيحة.';
+    }
+    if (_containsAny(normalized, const [
+      'required',
+      'مطلوب',
+      'يجب إدخال',
+    ])) {
+      return 'حقل $label مطلوب.';
+    }
+    if (_containsAny(normalized, const [
+      'already been taken',
+      'unique',
+      'مستخدم مسبق',
+      'موجود مسبق',
+    ])) {
+      return '$label مستخدم مسبقًا.';
+    }
+    if (_containsAny(normalized, const [
+      'confirmed',
+      'confirmation',
+      'غير متطابق',
+      'التأكيد',
+    ])) {
+      return 'تأكيد $label غير مطابق.';
+    }
+    if (isIdentityPhoto &&
+        _containsAny(normalized, const [
+          'max',
+          'must not exceed',
+          '4mb',
+          '4096',
+          'الحجم',
+        ])) {
+      return 'يجب ألا يتجاوز حجم كل صورة هوية 4 ميغابايت.';
+    }
+    if (isIdentityPhoto &&
+        _containsAny(normalized, const [
+          'mimes',
+          'jpg',
+          'jpeg',
+          'png',
+          'type',
+          'صيغة',
+        ])) {
+      return 'يجب أن تكون صورة الهوية بصيغة JPG أو PNG.';
+    }
+    if (isIdentityPhoto &&
+        _containsAny(normalized, const [
+          'image',
+          'صورة',
+        ])) {
+      return 'الملف المحدد ليس صورة هوية صالحة.';
+    }
+    if (_containsAny(normalized, const [
+      'does not exist',
+      'exists',
+      'not found',
+      'غير موجود',
+    ])) {
+      return '$label المحدد غير موجود.';
+    }
+    if (_containsAny(normalized, const [
+      'email',
+      'بريد',
+    ])) {
+      return 'صيغة البريد الإلكتروني غير صحيحة.';
+    }
+    if (_containsAny(normalized, const [
+      'date',
+      'before',
+      'after',
+      'تاريخ',
+    ])) {
+      return 'قيمة $label ليست تاريخًا صالحًا.';
+    }
+    if (_containsAny(normalized, const [
+      'otp',
+      'code',
+      'رمز',
+    ])) {
+      return 'رمز التحقق غير صحيح أو منتهي الصلاحية.';
+    }
+
+    return 'تحقق من قيمة $label.';
+  }
+
+  static String _fieldLabel(String field) {
+    const labels = <String, String>{
+      'login': 'البريد الإلكتروني أو رقم الهاتف',
+      'email': 'البريد الإلكتروني',
+      'phone': 'رقم الهاتف',
+      'phone_number': 'رقم الهاتف',
+      'password': 'كلمة المرور',
+      'password_confirmation': 'تأكيد كلمة المرور',
+      'current_password': 'كلمة المرور الحالية',
+      'otp': 'رمز التحقق',
+      'code': 'رمز التحقق',
+      'full_name': 'الاسم الكامل',
+      'national_id': 'الرقم الوطني',
+      'birth_date': 'تاريخ الميلاد',
+      'place_of_birth': 'مكان الولادة',
+      'gender': 'الجنس',
+      'governorate_id': 'المحافظة',
+      'municipality_id': 'البلدية',
+      'needs_special_care': 'حالة الرعاية الخاصة',
+      'front_id_photo': 'صورة الوجه الأمامي للهوية',
+      'back_id_photo': 'صورة الوجه الخلفي للهوية',
+      'identity': 'الهوية',
+    };
+
+    return labels[field] ?? 'البيانات المدخلة';
+  }
+
+  static bool _containsAny(String value, List<String> markers) {
+    return markers.any(value.contains);
+  }
+
+  static String? _technicalMessage({
+    required Object? responseData,
+    required String? serverMessage,
+  }) {
+    if (responseData != null) return responseData.toString();
+    return serverMessage;
+  }
+
+  static String _userMessageFor({
+    required ApiExceptionKind kind,
+    required String path,
+    required Map<String, List<String>> errors,
+  }) {
+    if (kind == ApiExceptionKind.validation && errors.isNotEmpty) {
+      return errors.values.first.first;
+    }
+
+    final normalizedPath = path.toLowerCase();
+    if (kind == ApiExceptionKind.unauthorized &&
+        normalizedPath.contains('login')) {
+      return 'بيانات تسجيل الدخول غير صحيحة.';
+    }
+    if (kind == ApiExceptionKind.notFound &&
+        normalizedPath.contains('forgot-password')) {
+      return 'لم يتم العثور على حساب بهذه البيانات.';
+    }
+
+    return _fallbackMessageFor(kind);
+  }
+
   static ApiExceptionKind _kindForStatus(int? statusCode) {
     if (statusCode == 401) return ApiExceptionKind.unauthorized;
     if (statusCode == 403) return ApiExceptionKind.forbidden;
     if (statusCode == 404) return ApiExceptionKind.notFound;
+    if (statusCode == 409) return ApiExceptionKind.conflict;
     if (statusCode == 422) return ApiExceptionKind.validation;
     if (statusCode == 429) return ApiExceptionKind.rateLimited;
     if (statusCode != null && statusCode >= 500 && statusCode <= 599) {
@@ -209,6 +397,8 @@ class ApiException implements Exception {
         return 'لا تملك صلاحية تنفيذ هذه العملية.';
       case ApiExceptionKind.notFound:
         return 'المورد المطلوب غير موجود.';
+      case ApiExceptionKind.conflict:
+        return 'تتعارض العملية مع بيانات موجودة مسبقًا.';
       case ApiExceptionKind.validation:
         return 'تحقق من البيانات المدخلة.';
       case ApiExceptionKind.rateLimited:

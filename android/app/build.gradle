@@ -24,7 +24,8 @@ if (flutterVersionName == null) {
 
 android {
     namespace "com.example.electronic_municipality"
-    compileSdkVersion flutter.compileSdkVersion
+    // Required by flutter_secure_storage and path_provider_android.
+    compileSdkVersion 34
     ndkVersion flutter.ndkVersion
 
     compileOptions {

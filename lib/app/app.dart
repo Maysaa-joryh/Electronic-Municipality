@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../features/authentication/presentation/screens/auth_screens.dart';
+import '../features/authentication/presentation/screens/change_temporary_password_screen.dart';
 import '../features/home/presentation/screens/app_shell.dart';
 import '../features/profile/presentation/screens/profile_screen.dart';
 import 'router.dart';
@@ -42,6 +43,8 @@ class AppRoot extends StatelessWidget {
                   ? settings.arguments as String
                   : '',
             ),
+          AppRoutes.changeTemporaryPassword =>
+            const ChangeTemporaryPasswordScreen(),
           AppRoutes.profile => const ProfileScreen(),
           _ => const AppSplashScreen(),
         };

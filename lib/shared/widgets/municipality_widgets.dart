@@ -695,9 +695,9 @@ class PasswordRulesBox extends StatelessWidget {
     const rules = ['8 أحرف على الأقل', 'حرف كبير وحرف صغير', 'رقم أو رمز خاص'];
     return Container(
       padding: const EdgeInsets.symmetric(
-  horizontal: 18,
-  vertical: 16,
-),
+        horizontal: 18,
+        vertical: 16,
+      ),
       decoration: BoxDecoration(
           color: AppColors.surfaceMuted,
           borderRadius: BorderRadius.circular(8),

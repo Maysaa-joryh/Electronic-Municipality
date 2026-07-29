@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../app/router.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/di.dart';
+import '../../../../core/network/api_exception.dart';
 import '../../../../shared/widgets/municipality_widgets.dart';
 
 class AuthResetPasswordScreen extends StatefulWidget {
@@ -57,12 +58,19 @@ class _AuthResetPasswordScreenState extends State<AuthResetPasswordScreen> {
         AppRoutes.login,
         (route) => false,
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      debugPrint('RESET PASSWORD ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
       if (mounted) {
         setState(() {
-          _errorMessage = 'فشل تعيين كلمة المرور الجديدة';
-          _isLoading = false;
+          _errorMessage = error is ApiException
+              ? error.message
+              : 'فشل تعيين كلمة المرور الجديدة';
         });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
   }

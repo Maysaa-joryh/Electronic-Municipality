@@ -6,6 +6,8 @@ class TokenStorage {
       : _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
   static const String _tokenKey = 'auth.sanctum_token';
+  static const String _requiresPasswordChangeKey =
+      'auth.requires_password_change';
 
   final FlutterSecureStorage _secureStorage;
 
@@ -28,7 +30,25 @@ class TokenStorage {
     );
   }
 
-  Future<void> deleteToken() {
-    return _secureStorage.delete(key: _tokenKey);
+  Future<bool> requiresPasswordChange() async {
+    return await _secureStorage.read(key: _requiresPasswordChangeKey) == 'true';
+  }
+
+  Future<void> writeSession({
+    required String token,
+    required bool requiresPasswordChange,
+  }) async {
+    await writeToken(token);
+    await _secureStorage.write(
+      key: _requiresPasswordChangeKey,
+      value: requiresPasswordChange.toString(),
+    );
+  }
+
+  Future<void> deleteToken() async {
+    await Future.wait<void>([
+      _secureStorage.delete(key: _tokenKey),
+      _secureStorage.delete(key: _requiresPasswordChangeKey),
+    ]);
   }
 }

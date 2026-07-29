@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:electronic_municipality/app/router.dart';
 import 'package:electronic_municipality/app/theme/app_colors.dart';
 import 'package:electronic_municipality/core/di.dart';
+import 'package:electronic_municipality/core/network/api_exception.dart';
 
 class AuthLoginButton extends StatefulWidget {
   const AuthLoginButton({super.key});
@@ -19,10 +20,18 @@ class _AuthLoginButtonState extends State<AuthLoginButton> {
       await DI.auth.login(identifier: 'demo@example.sy', password: 'password');
       if (!mounted) return;
       Navigator.of(context).pushReplacementNamed(AppRoutes.shell);
-    } catch (e) {
+    } catch (error, stackTrace) {
+      debugPrint('AUTH LOGIN BUTTON ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('فشل تسجيل الدخول: ${e.toString()}')),
+        SnackBar(
+          content: Text(
+            error is ApiException
+                ? error.message
+                : 'فشل تسجيل الدخول. حاول مرة أخرى.',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _loading = false);

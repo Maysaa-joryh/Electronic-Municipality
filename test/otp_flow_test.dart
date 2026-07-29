@@ -2,10 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:electronic_municipality/app/app.dart';
+import 'package:electronic_municipality/core/di.dart';
+import 'package:electronic_municipality/features/authentication/data/auth_repository_fake.dart';
 
 import 'helpers/widget_test_actions.dart';
 
 void main() {
+  setUp(() {
+    DI.overrideAuth(AuthRepositoryFake());
+  });
+
+  tearDown(DI.resetAuth);
+
   testWidgets(
     'password recovery accepts a complete OTP entered at once',
     (tester) async {

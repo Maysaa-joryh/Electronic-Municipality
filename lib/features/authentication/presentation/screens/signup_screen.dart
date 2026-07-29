@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../../app/router.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/di.dart';
+import '../../../../core/network/api_exception.dart';
 import '../../../../core/repositories/auth_repository.dart';
 import '../../../../shared/widgets/municipality_widgets.dart';
 
@@ -33,23 +34,6 @@ class AuthSignupScreen extends StatefulWidget {
 }
 
 class _AuthSignupScreenState extends State<AuthSignupScreen> {
-  static const _governorateMunicipalities = <String, List<String>>{
-    'دمشق': ['بلدية دمشق'],
-    'ريف دمشق': ['دوما', 'جرمانا', 'داريا', 'التل', 'قطنا'],
-    'حلب': ['حلب', 'الباب', 'منبج', 'أعزاز', 'السفيرة'],
-    'حمص': ['حمص', 'تدمر', 'الرستن', 'القصير'],
-    'حماة': ['حماة', 'سلمية', 'مصياف', 'محردة'],
-    'اللاذقية': ['اللاذقية', 'جبلة', 'القرداحة', 'الحفة'],
-    'طرطوس': ['طرطوس', 'بانياس', 'صافيتا', 'الدريكيش'],
-    'إدلب': ['إدلب', 'أريحا', 'جسر الشغور', 'معرة النعمان'],
-    'درعا': ['درعا', 'إزرع', 'الصنمين', 'نوى'],
-    'السويداء': ['السويداء', 'شهبا', 'صلخد'],
-    'القنيطرة': ['القنيطرة'],
-    'دير الزور': ['دير الزور', 'الميادين', 'البوكمال'],
-    'الرقة': ['الرقة', 'الطبقة', 'تل أبيض'],
-    'الحسكة': ['الحسكة', 'القامشلي', 'المالكية', 'رأس العين'],
-  };
-
   final _formKey = GlobalKey<FormState>();
   final _fullNameController = TextEditingController();
   final _nationalIdController = TextEditingController();
@@ -60,17 +44,87 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
   final _passwordController = TextEditingController();
 
   DateTime? _birthDate;
-  String? _selectedGovernorate;
-  String? _selectedMunicipality;
+  CitizenGender? _selectedGender;
+  int? _selectedGovernorateId;
+  int? _selectedMunicipalityId;
+  List<GovernorateOption> _governorates = const [];
+  List<MunicipalityOption> _municipalities = const [];
+  bool _isLoadingLocations = true;
+  bool _isLoadingMunicipalities = false;
   bool _needsSpecialCare = false;
   bool _acceptedTerms = false;
   bool _showTermsError = false;
   bool _isLoading = false;
   String? _errorMessage;
 
-  List<String> get _municipalities => _selectedGovernorate == null
-      ? const []
-      : _governorateMunicipalities[_selectedGovernorate] ?? const [];
+  @override
+  void initState() {
+    super.initState();
+    _loadGovernorates();
+  }
+
+  Future<void> _loadGovernorates() async {
+    setState(() {
+      _isLoadingLocations = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final governorates = await DI.auth.getGovernorates();
+      if (!mounted) return;
+      setState(() => _governorates = governorates);
+    } catch (error, stackTrace) {
+      debugPrint('LOAD GOVERNORATES ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        setState(() {
+          _errorMessage = _userFacingError(
+            error,
+            fallback: 'تعذر تحميل المحافظات حاليًا. حاول مرة أخرى لاحقًا.',
+          );
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingLocations = false);
+      }
+    }
+  }
+
+  Future<void> _selectGovernorate(int? governorateId) async {
+    setState(() {
+      _selectedGovernorateId = governorateId;
+      _selectedMunicipalityId = null;
+      _municipalities = const [];
+      _errorMessage = null;
+      _isLoadingMunicipalities = governorateId != null;
+    });
+
+    if (governorateId == null) return;
+
+    try {
+      final municipalities = await DI.auth.getMunicipalities(
+        governorateId: governorateId,
+      );
+      if (!mounted || _selectedGovernorateId != governorateId) return;
+      setState(() => _municipalities = municipalities);
+    } catch (error, stackTrace) {
+      debugPrint('LOAD MUNICIPALITIES ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted && _selectedGovernorateId == governorateId) {
+        setState(() {
+          _errorMessage = _userFacingError(
+            error,
+            fallback: 'تعذر تحميل البلديات حاليًا. حاول مرة أخرى لاحقًا.',
+          );
+        });
+      }
+    } finally {
+      if (mounted && _selectedGovernorateId == governorateId) {
+        setState(() => _isLoadingMunicipalities = false);
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -125,15 +179,21 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
       _errorMessage = null;
     });
 
-    if (!formIsValid || !termsAreValid || _birthDate == null) return;
+    if (!formIsValid ||
+        !termsAreValid ||
+        _birthDate == null ||
+        _selectedGender == null ||
+        _selectedMunicipalityId == null) {
+      return;
+    }
 
     final registration = CitizenRegistration(
       fullName: _fullNameController.text.trim(),
       nationalId: _nationalIdController.text.trim(),
       dateOfBirth: _birthDate!,
       placeOfBirth: _birthPlaceController.text.trim(),
-      governorate: _selectedGovernorate!,
-      municipality: _selectedMunicipality!,
+      municipalityId: _selectedMunicipalityId!,
+      gender: _selectedGender!,
       phone: _phoneController.text.trim(),
       email: _emailController.text.trim(),
       password: _passwordController.text,
@@ -144,18 +204,23 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await DI.auth.requestOtp(contact: registration.phone);
+      await DI.auth.registerCitizen(registration: registration);
 
       if (!mounted) return;
 
-      await Navigator.of(context).pushNamed(
-        AppRoutes.otp,
-        arguments: registration,
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRoutes.shell,
+        (route) => false,
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      debugPrint('REGISTER CITIZEN ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
       if (mounted) {
         setState(() {
-          _errorMessage = 'تعذر إرسال رمز التحقق. حاول مرة أخرى.';
+          _errorMessage = _userFacingError(
+            error,
+            fallback: 'تعذر إنشاء الحساب حاليًا. حاول مرة أخرى لاحقًا.',
+          );
         });
       }
     } finally {
@@ -173,6 +238,23 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
       navigator.pop();
     } else {
       navigator.pushReplacementNamed(AppRoutes.login);
+    }
+  }
+
+  String _userFacingError(
+    Object error, {
+    required String fallback,
+  }) {
+    if (error is! ApiException) return fallback;
+
+    switch (error.kind) {
+      case ApiExceptionKind.server:
+      case ApiExceptionKind.invalidResponse:
+      case ApiExceptionKind.configuration:
+      case ApiExceptionKind.unknown:
+        return fallback;
+      default:
+        return error.message;
     }
   }
 
@@ -209,12 +291,21 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
 
   String? _validateEmail(String? value) {
     final email = value?.trim() ?? '';
-    if (email.isEmpty) return null;
+    if (email.isEmpty) return 'البريد الإلكتروني مطلوب';
 
     final emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
     return emailPattern.hasMatch(email)
         ? null
         : 'أدخل بريداً إلكترونياً صحيحاً';
+  }
+
+  String? _validatePassword(String? value) {
+    final password = value ?? '';
+    if (password.isEmpty) return 'كلمة المرور مطلوبة';
+    if (password.length < 8) {
+      return 'يجب ألا تقل كلمة المرور عن 8 محارف';
+    }
+    return null;
   }
 
   @override
@@ -245,12 +336,36 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                               _SignupErrorMessage(
                                 message: _errorMessage!,
                               ),
+                              if (_governorates.isEmpty && !_isLoadingLocations)
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton.icon(
+                                    onPressed: _loadGovernorates,
+                                    icon: const Icon(Icons.refresh_rounded),
+                                    label: const Text('إعادة المحاولة'),
+                                  ),
+                                ),
+                              if (_selectedGovernorateId != null &&
+                                  _municipalities.isEmpty &&
+                                  !_isLoadingMunicipalities)
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton.icon(
+                                    onPressed: () => _selectGovernorate(
+                                      _selectedGovernorateId,
+                                    ),
+                                    icon: const Icon(Icons.refresh_rounded),
+                                    label: const Text(
+                                      'إعادة تحميل البلديات',
+                                    ),
+                                  ),
+                                ),
                               const SizedBox(height: 24),
                             ],
                             _SignupSection(
                               title: 'البيانات الشخصية',
                               icon: Icons.badge_outlined,
-                              minHeight: 300,
+                              minHeight: 370,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
@@ -288,6 +403,31 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                                     validator: _validateNationalId,
                                   ),
                                   const SizedBox(height: 16),
+                                  _SignupDropdownField<CitizenGender>(
+                                    fieldKey: const ValueKey(
+                                      'signup_gender_field',
+                                    ),
+                                    label: 'الجنس',
+                                    hint: 'اختر الجنس...',
+                                    value: _selectedGender,
+                                    items: CitizenGender.values,
+                                    itemLabel: (gender) =>
+                                        gender == CitizenGender.male
+                                            ? 'ذكر'
+                                            : 'أنثى',
+                                    maxWidth: _signupFieldMaxWidth,
+                                    onChanged: _isLoading
+                                        ? null
+                                        : (value) {
+                                            setState(() {
+                                              _selectedGender = value;
+                                              _errorMessage = null;
+                                            });
+                                          },
+                                    validator: (value) =>
+                                        value == null ? 'اختر الجنس' : null,
+                                  ),
+                                  const SizedBox(height: 16),
                                   _SignupDateField(
                                     controller: _birthDateController,
                                     onTap: _pickBirthDate,
@@ -321,44 +461,52 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  _SignupDropdownField(
+                                  _SignupDropdownField<int>(
                                     fieldKey: const ValueKey(
                                       'signup_governorate_field',
                                     ),
                                     label: 'المحافظة',
-                                    hint: 'اختر المحافظة...',
-                                    value: _selectedGovernorate,
-                                    items: _governorateMunicipalities.keys
+                                    hint: _isLoadingLocations
+                                        ? 'جاري تحميل المحافظات...'
+                                        : 'اختر المحافظة...',
+                                    value: _selectedGovernorateId,
+                                    items: _governorates
+                                        .map((item) => item.id)
                                         .toList(growable: false),
+                                    itemLabel: (id) => _governorates
+                                        .firstWhere((item) => item.id == id)
+                                        .name,
                                     maxWidth: _signupFieldMaxWidth,
-                                    onChanged: _isLoading
+                                    onChanged: _isLoading || _isLoadingLocations
                                         ? null
-                                        : (value) {
-                                            setState(() {
-                                              _selectedGovernorate = value;
-                                              _selectedMunicipality = null;
-                                              _errorMessage = null;
-                                            });
-                                          },
+                                        : _selectGovernorate,
                                     validator: (value) =>
                                         value == null ? 'اختر المحافظة' : null,
                                   ),
                                   const SizedBox(height: 16),
-                                  _SignupDropdownField(
+                                  _SignupDropdownField<int>(
                                     fieldKey: const ValueKey(
                                       'signup_municipality_field',
                                     ),
                                     label: 'البلدية التابع لها',
-                                    hint: 'اختر البلدية...',
-                                    value: _selectedMunicipality,
-                                    items: _municipalities,
+                                    hint: _isLoadingMunicipalities
+                                        ? 'جاري تحميل البلديات...'
+                                        : 'اختر البلدية...',
+                                    value: _selectedMunicipalityId,
+                                    items: _municipalities
+                                        .map((item) => item.id)
+                                        .toList(growable: false),
+                                    itemLabel: (id) => _municipalities
+                                        .firstWhere((item) => item.id == id)
+                                        .name,
                                     maxWidth: _signupFieldMaxWidth,
                                     onChanged: _isLoading ||
-                                            _selectedGovernorate == null
+                                            _isLoadingMunicipalities ||
+                                            _selectedGovernorateId == null
                                         ? null
                                         : (value) {
                                             setState(() {
-                                              _selectedMunicipality = value;
+                                              _selectedMunicipalityId = value;
                                               _errorMessage = null;
                                             });
                                           },
@@ -403,7 +551,7 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                                     fieldKey: const ValueKey(
                                       'signup_email_field',
                                     ),
-                                    label: 'البريد الإلكتروني (اختياري)',
+                                    label: 'البريد الإلكتروني',
                                     hint: 'example@mail.sy',
                                     controller: _emailController,
                                     maxWidth: 253,
@@ -436,10 +584,7 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                                     onFieldSubmitted: (_) {
                                       if (!_isLoading) _submit();
                                     },
-                                    validator: (value) => _validateRequired(
-                                      value,
-                                      'كلمة المرور مطلوبة',
-                                    ),
+                                    validator: _validatePassword,
                                   ),
                                 ],
                               ),
@@ -591,7 +736,7 @@ class _SignupSection extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: const Color(0xFFFBF9F4),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0x4DC0C8C4)),
       ),
       child: Column(
@@ -602,14 +747,16 @@ class _SignupSection extends StatelessWidget {
             children: [
               Icon(icon, size: 21, color: const Color(0xFF775A19)),
               const SizedBox(width: 8),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: const Color(0xFF00261E),
-                      fontSize: 20,
-                      height: 28 / 20,
-                      fontWeight: FontWeight.w500,
-                    ),
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: const Color(0xFF00261E),
+                        fontSize: 20,
+                        height: 28 / 20,
+                        fontWeight: FontWeight.w500,
+                      ),
+                ),
               ),
             ],
           ),
@@ -762,13 +909,14 @@ class _SignupDateField extends StatelessWidget {
   }
 }
 
-class _SignupDropdownField extends StatelessWidget {
+class _SignupDropdownField<T> extends StatelessWidget {
   const _SignupDropdownField({
     required this.fieldKey,
     required this.label,
     required this.hint,
     required this.value,
     required this.items,
+    required this.itemLabel,
     required this.maxWidth,
     required this.onChanged,
     required this.validator,
@@ -777,11 +925,12 @@ class _SignupDropdownField extends StatelessWidget {
   final Key fieldKey;
   final String label;
   final String hint;
-  final String? value;
-  final List<String> items;
+  final T? value;
+  final List<T> items;
+  final String Function(T item) itemLabel;
   final double maxWidth;
-  final ValueChanged<String?>? onChanged;
-  final FormFieldValidator<String> validator;
+  final ValueChanged<T?>? onChanged;
+  final FormFieldValidator<T> validator;
 
   @override
   Widget build(BuildContext context) {
@@ -797,7 +946,7 @@ class _SignupDropdownField extends StatelessWidget {
           alignment: Alignment.centerRight,
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: maxWidth),
-            child: DropdownButtonFormField<String>(
+            child: DropdownButtonFormField<T>(
               key: fieldKey,
               value: value,
               validator: validator,
@@ -819,10 +968,10 @@ class _SignupDropdownField extends StatelessWidget {
               ),
               items: items
                   .map(
-                    (item) => DropdownMenuItem<String>(
+                    (item) => DropdownMenuItem<T>(
                       value: item,
                       child: Text(
-                        item,
+                        itemLabel(item),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1034,36 +1183,40 @@ class _SignupActions extends StatelessWidget {
                         color: Color(0xFFFFDEA5),
                       ),
                     )
-                  : const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      textDirection: TextDirection.ltr,
-                      children: [
-                        Icon(
-                          Icons.west_rounded,
-                          size: 20,
-                          color: Color(0xFFFFDEA5),
-                        ),
-                        SizedBox(width: 8),
-                        Text(
-                          'إنشاء الحساب الرسمي',
-                          style: TextStyle(
+                  : const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        textDirection: TextDirection.ltr,
+                        children: [
+                          Icon(
+                            Icons.west_rounded,
+                            size: 20,
                             color: Color(0xFFFFDEA5),
-                            fontSize: 20,
-                            height: 28 / 20,
-                            fontWeight: FontWeight.w500,
                           ),
-                        ),
-                      ],
+                          SizedBox(width: 8),
+                          Text(
+                            'إنشاء الحساب الرسمي',
+                            style: TextStyle(
+                              color: Color(0xFFFFDEA5),
+                              fontSize: 20,
+                              height: 28 / 20,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
             ),
           ),
           const SizedBox(height: 16),
           Padding(
             padding: const EdgeInsets.only(top: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 4,
               children: [
                 const Text(
                   'لديك حساب بالفعل؟',
@@ -1073,7 +1226,6 @@ class _SignupActions extends StatelessWidget {
                     height: 1.5,
                   ),
                 ),
-                const SizedBox(width: 4),
                 TextButton(
                   key: const ValueKey('signup_login_button'),
                   onPressed: isLoading ? null : onLogin,

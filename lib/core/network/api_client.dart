@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../config/api_config.dart';
 import '../storage/token_storage.dart';
@@ -147,12 +148,26 @@ class ApiClient {
     } on ApiException {
       rethrow;
     } on DioException catch (error) {
+      if (kDebugMode) {
+        final mappedError = ApiException.fromDioException(error);
+        debugPrint(
+          'API ERROR [$method $path] '
+          'status=${error.response?.statusCode}\n'
+          '${mappedError.technicalMessage ?? error.message}',
+        );
+        debugPrintStack(stackTrace: error.stackTrace);
+      }
       throw ApiException.fromDioException(error);
-    } catch (error) {
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('UNEXPECTED API ERROR [$method $path]: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
       throw ApiException(
         kind: ApiExceptionKind.unknown,
         message: 'حدث خطأ غير متوقع أثناء تجهيز الطلب.',
         cause: error,
+        technicalMessage: error.toString(),
       );
     }
   }

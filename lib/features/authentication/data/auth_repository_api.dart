@@ -5,54 +5,43 @@ import 'auth_remote_data_source.dart';
 import 'models/auth_session_model.dart';
 import 'models/auth_user_model.dart';
 
-typedef CitizenRegistrationMapper = CitizenRegistrationApiRequest Function(
-  CitizenRegistration registration,
-);
-
-/// API-backed implementation of the existing authentication contract.
-///
-/// The legacy Flutter registration model is missing `gender` and `national_id`
-/// required by Laravel. A mapper must therefore be supplied after those fields
-/// are collected by the UI; silently inventing them would corrupt citizen data.
+/// API-backed implementation of the authentication contract.
 class AuthRepositoryApi implements AuthRepository {
   AuthRepositoryApi({
     required AuthRemoteDataSource remoteDataSource,
     required TokenStorage tokenStorage,
-    CitizenRegistrationMapper? registrationMapper,
   })  : _remoteDataSource = remoteDataSource,
-        _tokenStorage = tokenStorage,
-        _registrationMapper = registrationMapper;
+        _tokenStorage = tokenStorage;
 
   final AuthRemoteDataSource _remoteDataSource;
   final TokenStorage _tokenStorage;
-  final CitizenRegistrationMapper? _registrationMapper;
-  final Map<String, String> _resetTokensByEmail = <String, String>{};
 
   AuthUserModel? _currentUser;
-  bool _requiresPasswordChange = false;
-
-  AuthUserModel? get currentUser => _currentUser;
-  bool get requiresPasswordChange => _requiresPasswordChange;
-
-  Future<bool> get isAuthenticated => _tokenStorage.hasToken();
 
   @override
-  Future<void> login({
+  AuthUserModel? get currentUser => _currentUser;
+
+  @override
+  Future<AuthLoginResult> login({
     required String identifier,
     required String password,
   }) async {
-    await loginWithEmail(
-      email: _requireEmail(identifier),
+    final session = await loginWithIdentifier(
+      identifier: _requireIdentifier(identifier),
       password: password,
+    );
+    return AuthLoginResult(
+      user: session.user,
+      requiresPasswordChange: session.requiresPasswordChange,
     );
   }
 
-  Future<AuthSessionModel> loginWithEmail({
-    required String email,
+  Future<AuthSessionModel> loginWithIdentifier({
+    required String identifier,
     required String password,
   }) async {
     final session = await _remoteDataSource.login(
-      email: _requireEmail(email),
+      identifier: _requireIdentifier(identifier),
       password: password,
     );
     await _persistSession(session);
@@ -60,18 +49,13 @@ class AuthRepositoryApi implements AuthRepository {
   }
 
   @override
-  Future<void> registerCitizen({
+  Future<AuthUser> registerCitizen({
     required CitizenRegistration registration,
   }) async {
-    final mapper = _registrationMapper;
-    if (mapper == null) {
-      throw ApiException.configuration(
-        'لا يمكن ربط التسجيل بعد: نموذج Flutter الحالي لا يجمع الجنس '
-        'والرقم الوطني المطلوبين من الخادم.',
-      );
-    }
-
-    await registerCitizenWithRequest(mapper(registration));
+    final session = await registerCitizenWithRequest(
+      CitizenRegistrationApiRequest.fromDomain(registration),
+    );
+    return session.user;
   }
 
   Future<AuthSessionModel> registerCitizenWithRequest(
@@ -83,13 +67,26 @@ class AuthRepositoryApi implements AuthRepository {
   }
 
   @override
+  Future<List<GovernorateOption>> getGovernorates() {
+    return _remoteDataSource.getGovernorates();
+  }
+
+  @override
+  Future<List<MunicipalityOption>> getMunicipalities({
+    required int governorateId,
+  }) {
+    return _remoteDataSource.getMunicipalities(
+      governorateId: governorateId,
+    );
+  }
+
+  @override
   Future<void> requestOtp({required String contact}) {
     return requestPasswordReset(email: contact);
   }
 
   Future<void> requestPasswordReset({required String email}) {
     final normalizedEmail = _requireEmail(email);
-    _resetTokensByEmail.remove(normalizedEmail);
     return _remoteDataSource.requestPasswordReset(
       email: normalizedEmail,
     );
@@ -102,23 +99,11 @@ class AuthRepositoryApi implements AuthRepository {
   }) async {
     final email = _requireEmail(contact);
 
-    try {
-      final verification = await _remoteDataSource.verifyResetOtp(
-        email: email,
-        otp: code,
-      );
-
-      final resetToken = verification.resetToken;
-      if (resetToken != null) {
-        _resetTokensByEmail[email] = resetToken;
-      }
-      return true;
-    } on ApiException catch (error) {
-      if (error.isValidation && error.errors.containsKey('otp')) {
-        return false;
-      }
-      rethrow;
-    }
+    await _remoteDataSource.verifyResetOtp(
+      email: email,
+      otp: code,
+    );
+    return true;
   }
 
   @override
@@ -127,40 +112,44 @@ class AuthRepositoryApi implements AuthRepository {
     required String newPassword,
   }) async {
     final email = _requireEmail(contact);
-    final resetToken = _resetTokensByEmail[email];
-
-    if (resetToken == null) {
-      throw ApiException.configuration(
-        'رفض التطبيق تغيير كلمة المرور لأن الخادم لم يُرجع reset_token '
-        'بعد التحقق من OTP. يجب إصلاح عقد الباك قبل تفعيل هذه العملية.',
-      );
-    }
 
     await _remoteDataSource.resetPassword(
       email: email,
-      resetToken: resetToken,
       password: newPassword,
     );
-    _resetTokensByEmail.remove(email);
     await clearLocalSession();
   }
 
-  Future<AuthUserModel?> restoreSession() async {
-    if (!await _tokenStorage.hasToken()) return null;
+  @override
+  Future<AuthStartupDestination> restoreSession() async {
+    if (!await _tokenStorage.hasToken()) {
+      return AuthStartupDestination.login;
+    }
+
+    if (await _tokenStorage.requiresPasswordChange()) {
+      return AuthStartupDestination.changeTemporaryPassword;
+    }
 
     try {
-      final user = await _remoteDataSource.fetchCurrentUser();
-      _currentUser = user;
-      return user;
+      await getCurrentUser();
+      return AuthStartupDestination.authenticated;
     } on ApiException catch (error) {
       if (error.isUnauthorized) {
         await clearLocalSession();
-        return null;
+        return AuthStartupDestination.login;
       }
       rethrow;
     }
   }
 
+  @override
+  Future<AuthUserModel> getCurrentUser() async {
+    final user = await _remoteDataSource.fetchCurrentUser();
+    _currentUser = user;
+    return user;
+  }
+
+  @override
   Future<void> logout() async {
     try {
       if (await _tokenStorage.hasToken()) {
@@ -171,6 +160,7 @@ class AuthRepositoryApi implements AuthRepository {
     }
   }
 
+  @override
   Future<void> changeTemporaryPassword({
     required String currentPassword,
     required String newPassword,
@@ -185,13 +175,27 @@ class AuthRepositoryApi implements AuthRepository {
   Future<void> clearLocalSession() async {
     await _tokenStorage.deleteToken();
     _currentUser = null;
-    _requiresPasswordChange = false;
   }
 
   Future<void> _persistSession(AuthSessionModel session) async {
-    await _tokenStorage.writeToken(session.token);
+    await _tokenStorage.writeSession(
+      token: session.token,
+      requiresPasswordChange: session.requiresPasswordChange,
+    );
     _currentUser = session.user;
-    _requiresPasswordChange = session.requiresPasswordChange;
+  }
+
+  static String _requireIdentifier(String value) {
+    final identifier = value.trim();
+    if (identifier.isEmpty) {
+      throw ApiException.validation(
+        message: 'رقم الهاتف أو البريد الإلكتروني مطلوب.',
+        errors: const {
+          'login': ['رقم الهاتف أو البريد الإلكتروني مطلوب.'],
+        },
+      );
+    }
+    return identifier;
   }
 
   static String _requireEmail(String value) {

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../app/design_system.dart';
 import '../../../../app/router.dart';
 import '../../../../app/theme/app_colors.dart';
+import '../../../../core/di.dart';
+import '../../../../core/repositories/auth_repository.dart';
 import '../../../../shared/widgets/municipality_widgets.dart';
 
 class AppSplashScreen extends StatefulWidget {
@@ -24,22 +26,39 @@ class _AppSplashScreenState extends State<AppSplashScreen>
     _progressController = AnimationController(
       vsync: this,
       duration: _splashDuration,
-    )
-      ..addStatusListener(_handleProgressStatus)
-      ..forward();
+    )..forward();
+    _initialize();
   }
 
-  void _handleProgressStatus(AnimationStatus status) {
-    if (status == AnimationStatus.completed && mounted) {
-      Navigator.of(context).pushReplacementNamed(AppRoutes.login);
+  Future<void> _initialize() async {
+    var destination = AuthStartupDestination.login;
+
+    try {
+      final results = await Future.wait<Object?>([
+        DI.auth.restoreSession(),
+        Future<void>.delayed(_splashDuration),
+      ]);
+      destination = results.first as AuthStartupDestination;
+    } catch (error, stackTrace) {
+      debugPrint('SESSION RESTORE ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
     }
+
+    if (!mounted) return;
+
+    final route = switch (destination) {
+      AuthStartupDestination.authenticated => AppRoutes.shell,
+      AuthStartupDestination.changeTemporaryPassword =>
+        AppRoutes.changeTemporaryPassword,
+      AuthStartupDestination.login => AppRoutes.login,
+    };
+
+    Navigator.of(context).pushReplacementNamed(route);
   }
 
   @override
   void dispose() {
-    _progressController
-      ..removeStatusListener(_handleProgressStatus)
-      ..dispose();
+    _progressController.dispose();
     super.dispose();
   }
 

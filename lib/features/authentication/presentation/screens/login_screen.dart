@@ -4,6 +4,7 @@ import '../../../../app/design_system.dart';
 import '../../../../app/router.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/di.dart';
+import '../../../../core/network/api_exception.dart';
 import '../../../../shared/widgets/municipality_widgets.dart';
 
 class AuthLoginScreen extends StatefulWidget {
@@ -58,20 +59,32 @@ class _AuthLoginScreenState extends State<AuthLoginScreen> {
     });
 
     try {
-      await DI.auth.login(
+      final result = await DI.auth.login(
         identifier: _identifierController.text.trim(),
         password: _passwordController.text,
       );
 
       if (mounted) {
-        Navigator.of(context).pushReplacementNamed(AppRoutes.shell);
+        _passwordController.clear();
+        Navigator.of(context).pushReplacementNamed(
+          result.requiresPasswordChange
+              ? AppRoutes.changeTemporaryPassword
+              : AppRoutes.shell,
+        );
       }
-    } catch (_) {
+    } catch (error, stackTrace) {
+      debugPrint('LOGIN ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
       if (mounted) {
         setState(() {
-          _errorMessage = 'فشل تسجيل الدخول. تحقق من بيانات الدخول.';
-          _isLoading = false;
+          _errorMessage = error is ApiException
+              ? error.message
+              : 'فشل تسجيل الدخول. حاول مرة أخرى.';
         });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
   }

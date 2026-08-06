@@ -1,0 +1,59 @@
+// PATH: lib/core/constants/app_sizes.dart
+class AppSizes {
+  static const double screenPadding = 16;
+  static const double screenPaddingLarge = 20;
+  static const double sectionSpacing = 18;
+  static const double cardSpacing = 12;
+  static const double widgetSpacing = 10;
+  static const double tinySpacing = 6;
+  static const double avatarSize = 40;
+  static const double searchBarHeight = 46;
+  static const double searchBarRadius = 22;
+  static const double sectionRadius = 22;
+  static const double cardRadius = 18;
+  static const double newsCardHeight = 170;
+  static const double bannerHeight = 66;
+  static const double mapSectionHeight = 320;
+  static const double bottomBarRadius = 26;
+  static const double iconSizeSmall = 18;
+  static const double iconSizeMedium = 22;
+  static const double badgeSize = 12;
+
+  static const double newsHeaderAvatarSize = 28;
+  static const double newsHeaderIconSize = 16;
+  static const double newsChipHeight = 26;
+  static const double newsChipRadius = 13;
+  static const double newsCardRadius = 12;
+  static const double newsAlertMinHeight = 108;
+  static const double newsEventHeight = 229;
+  static const double newsMiniBadgeHeight = 20;
+  static const double newsBottomNavHeight = 70;
+  static const double newsBottomNavIconSize = 18;
+  static const double newsBottomSelectedPillHeight = 52;
+  static const double newsBottomSelectedPillWidth = 52;
+  static const double newsCardBorderWidth = 2;
+  static const double newsCardShadowBlur = 8;
+  static const double newsCardShadowOffsetY = 2;
+  static const double newsEventShadowBlur = 10;
+  static const double newsEventShadowOffsetY = 4;
+  static const double newsBottomNavOuterMargin = 8;
+  static const double newsBottomNavBottomMargin = 8;
+  static const double newsBottomNavSelectedRadius = 16;
+  static const double newsBottomNavLabelGap = 4;
+  static const double newsActionButtonHeight = 12;
+  static const double newsActionIconSize = 14;
+  static const double newsEventActionButtonHeight = 30;
+  static const double newsEventActionButtonRadius = 15;
+
+  static const double newsDetailsHeaderHeight = 52;
+  static const double newsDetailsHeaderIconWrap = 28;
+  static const double newsDetailsHeroHeight = 174;
+  static const double newsDetailsDatePillHeight = 24;
+  static const double newsDetailsDatePillRadius = 12;
+  static const double newsDetailsPanelTopOffset = 24;
+  static const double newsDetailsPanelPadding = 14;
+  static const double newsDetailsLineGap = 8;
+  static const double newsDetailsActionButtonHeight = 32;
+  static const double newsDetailsActionButtonRadius = 16;
+  static const double newsDetailsActionIcon = 14;
+}

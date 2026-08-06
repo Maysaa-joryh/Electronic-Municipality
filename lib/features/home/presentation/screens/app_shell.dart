@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../../../app/router.dart';
 import '../../../../app/theme/app_colors.dart';
-import '../../../complaints/presentation/screens/complaints_screen.dart';
-import '../../../home/presentation/screens/home_screen.dart';
-import '../../../news/presentation/screens/news_screen.dart';
+// ملاحظة دمج: الشاشات الأصلية (complaints_screen.dart / home_screen.dart / news_screen.dart)
+// بقيت في المشروع بدون أي حذف أو تعديل. الاستيرادات التالية تشير إلى نسخ الواجهات
+// المصممة حديثًا (home_page.dart / complaints_page.dart / news_announcements_page.dart)
+// وهي الآن المستخدمة فعليًا داخل التابات، بينما تبقى الملفات القديمة متاحة كمرجع.
+import '../../../complaints/presentation/screens/complaints_page.dart';
+import '../../../home/presentation/screens/home_page.dart';
+import '../../../news/presentation/screens/news_announcements_page.dart';
 import '../../../settings/presentation/screens/settings_screen.dart';
 import '../../../transactions/presentation/screens/transactions_screen.dart';
 
@@ -78,7 +82,7 @@ class _AppShellState extends State<AppShell> {
   Widget _buildPage(int index) {
     switch (index) {
       case 0:
-        return HomeScreen(
+        return HomePage(
           onOpenProfile: _openProfile,
           onOpenComplaints: () => setState(() => _index = 2),
           onOpenTransactions: () => setState(() => _index = 1),
@@ -87,9 +91,12 @@ class _AppShellState extends State<AppShell> {
       case 1:
         return const TransactionsScreen();
       case 2:
-        return const ComplaintsScreen();
+        return ComplaintsPage(
+          onOpenProfile: _openProfile,
+          onOpenNews: () => setState(() => _index = 3),
+        );
       case 3:
-        return const NewsScreen();
+        return NewsAnnouncementsPage(onOpenProfile: _openProfile);
       case 4:
         return SettingsScreen(onOpenProfile: _openProfile);
       default:

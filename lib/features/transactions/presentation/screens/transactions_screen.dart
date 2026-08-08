@@ -52,7 +52,10 @@ class TransactionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppPanel(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 18,
+          vertical: 16,
+        ),
         child: Row(children: [
           CircleIcon(
               icon: icon,

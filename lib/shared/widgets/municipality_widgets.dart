@@ -1,4 +1,7 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import '../../app/design_system.dart';
 import '../../app/theme/app_colors.dart';
 import '../../core/constants/app_assets.dart';
 
@@ -184,30 +187,118 @@ class BackTextButton extends StatelessWidget {
 }
 
 class AuthCenterScaffold extends StatelessWidget {
-  const AuthCenterScaffold(
-      {super.key, required this.child, required this.verticalPadding});
+  const AuthCenterScaffold({
+    super.key,
+    required this.child,
+    required this.verticalPadding,
+    this.horizontalPadding = AppSpacing.xl,
+    this.decoratedBackground = false,
+  });
 
   final Widget child;
   final EdgeInsets verticalPadding;
+  final double horizontalPadding;
+  final bool decoratedBackground;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              padding: verticalPadding,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: Center(
-                    child: ConstrainedBox(
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (decoratedBackground) const _AuthBackgroundDecoration(),
+          SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final minContentHeight =
+                    (constraints.maxHeight - verticalPadding.vertical)
+                        .clamp(0.0, double.infinity)
+                        .toDouble();
+
+                return SingleChildScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.only(
+                    left: horizontalPadding,
+                    top: verticalPadding.top,
+                    right: horizontalPadding,
+                    bottom: verticalPadding.bottom,
+                  ),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: minContentHeight),
+                    child: Center(
+                      child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 620),
-                        child: child)),
-              ),
-            );
-          },
+                        child: child,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuthBackgroundDecoration extends StatelessWidget {
+  const _AuthBackgroundDecoration();
+
+  @override
+  Widget build(BuildContext context) {
+    return const IgnorePointer(
+      child: Stack(
+        clipBehavior: Clip.hardEdge,
+        children: [
+          Positioned(
+            width: 800,
+            height: 800,
+            left: -160,
+            top: -160,
+            child: _BlurredCircle(
+              color: Color(0x80F0EEE9),
+              blurSigma: 32,
+            ),
+          ),
+          Positioned(
+            width: 600,
+            height: 600,
+            right: -80,
+            bottom: -80,
+            child: _BlurredCircle(
+              color: Color(0x4DFFDEAE),
+              blurSigma: 32,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BlurredCircle extends StatelessWidget {
+  const _BlurredCircle({
+    required this.color,
+    required this.blurSigma,
+  });
+
+  final Color color;
+  final double blurSigma;
+
+  @override
+  Widget build(BuildContext context) {
+    return ImageFiltered(
+      imageFilter: ui.ImageFilter.blur(
+        sigmaX: blurSigma,
+        sigmaY: blurSigma,
+      ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
         ),
       ),
     );
@@ -243,17 +334,20 @@ class AuthCard extends StatelessWidget {
 }
 
 class AppPanel extends StatelessWidget {
-  const AppPanel(
-      {super.key,
-      required this.child,
-      this.padding = const EdgeInsets.all(22),
-      this.borderColor = AppColors.border,
-      this.elevation = false});
+  const AppPanel({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(22),
+    this.borderColor = AppColors.border,
+    this.elevation = false,
+    this.borderRadius = AppRadius.md,
+  });
 
   final Widget child;
   final EdgeInsets padding;
   final Color borderColor;
   final bool elevation;
+  final double borderRadius;
 
   @override
   Widget build(BuildContext context) {
@@ -262,7 +356,7 @@ class AppPanel extends StatelessWidget {
       padding: padding,
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(borderRadius),
         border: Border.all(color: borderColor),
         boxShadow: [
           BoxShadow(
@@ -284,11 +378,18 @@ class MunicipalityLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final image = Image.asset(AppAssets.municipalityLogo,
-        width: size,
-        height: size,
-        fit: BoxFit.contain,
-        filterQuality: FilterQuality.high);
+    final assetPath = Theme.of(context).brightness == Brightness.dark
+        ? AppAssets.municipalityLogoDark
+        : AppAssets.municipalityLogoLight;
+
+    final image = Image.asset(
+      assetPath,
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.high,
+      gaplessPlayback: true,
+    );
 
     if (!framed) return image;
 
@@ -559,7 +660,10 @@ class UploadBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 18,
+        vertical: 16,
+      ),
       decoration: BoxDecoration(
           color: AppColors.background,
           borderRadius: BorderRadius.circular(8),
@@ -590,7 +694,10 @@ class PasswordRulesBox extends StatelessWidget {
   Widget build(BuildContext context) {
     const rules = ['8 أحرف على الأقل', 'حرف كبير وحرف صغير', 'رقم أو رمز خاص'];
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 18,
+        vertical: 16,
+      ),
       decoration: BoxDecoration(
           color: AppColors.surfaceMuted,
           borderRadius: BorderRadius.circular(8),

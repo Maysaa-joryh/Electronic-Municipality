@@ -10,7 +10,10 @@ class AppColors {
   static const Color mint = Color(0xFFC8F1DD);
   static const Color gold = Color(0xFF87672C);
   static const Color goldLight = Color(0xFFE9C176);
-
+// Splash screen
+  static const Color splashFrame = Color(0xFF395740);
+  static const Color splashSubtitle = Color(0xFF84B3A5);
+  static const Color splashProgressTrack = Color(0xFF00261E);
   // Backgrounds
   static const Color background = Color(0xFFFBF9F4);
   static const Color surface = Color(0xFFFFFFFF);
@@ -19,6 +22,7 @@ class AppColors {
   // UI elements
   static const Color border = Color(0xFFC0C8C4);
   static const Color divider = Color(0xFFE8ECE9);
+  static const Color shadow = Color(0x1F0A2F27);
 
   // Text colors
   static const Color text = Color(0xFF111513);
@@ -30,4 +34,5 @@ class AppColors {
   static const Color warning = Color(0xFFE9C176);
   static const Color success = Color(0xFF0D7755);
   static const Color info = Color(0xFF0061A1);
+  static const Color sky = Color(0xFF40A9DD);
 }

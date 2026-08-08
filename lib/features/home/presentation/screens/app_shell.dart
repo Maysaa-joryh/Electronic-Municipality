@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../../../app/router.dart';
 import '../../../../app/theme/app_colors.dart';
-import '../../../complaints/presentation/screens/complaints_screen.dart';
-import '../../../home/presentation/screens/home_screen.dart';
-import '../../../news/presentation/screens/news_screen.dart';
+// ملاحظة دمج: الشاشات الأصلية (complaints_screen.dart / home_screen.dart / news_screen.dart)
+// بقيت في المشروع بدون أي حذف أو تعديل. الاستيرادات التالية تشير إلى نسخ الواجهات
+// المصممة حديثًا (home_page.dart / complaints_page.dart / news_announcements_page.dart)
+// وهي الآن المستخدمة فعليًا داخل التابات، بينما تبقى الملفات القديمة متاحة كمرجع.
+import '../../../complaints/presentation/screens/complaints_page.dart';
+import '../../../home/presentation/screens/home_page.dart';
+import '../../../news/presentation/screens/news_announcements_page.dart';
 import '../../../settings/presentation/screens/settings_screen.dart';
 import '../../../transactions/presentation/screens/transactions_screen.dart';
 
@@ -31,32 +35,9 @@ class _AppShellState extends State<AppShell> {
         bottom: false,
         child: _buildPage(_index),
       ),
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: _MunicipalityBottomNavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (value) => setState(() => _index = value),
-        indicatorColor: AppColors.primary.withOpacity(0.15),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
-            label: 'الرئيسية',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long),
-            label: 'المعاملات',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.report_problem_outlined),
-            selectedIcon: Icon(Icons.report_problem),
-            label: 'الشكاوى',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.newspaper_outlined),
-            selectedIcon: Icon(Icons.newspaper),
-            label: 'الأخبار',
-          ),
-        ],
       ),
       drawer: Drawer(
         child: SafeArea(
@@ -101,19 +82,130 @@ class _AppShellState extends State<AppShell> {
   Widget _buildPage(int index) {
     switch (index) {
       case 0:
-        return HomeScreen(
+        return HomePage(
           onOpenProfile: _openProfile,
           onOpenComplaints: () => setState(() => _index = 2),
           onOpenTransactions: () => setState(() => _index = 1),
+          onOpenNews: () => setState(() => _index = 3),
         );
       case 1:
         return const TransactionsScreen();
       case 2:
-        return const ComplaintsScreen();
+        return ComplaintsPage(
+          onOpenProfile: _openProfile,
+          onOpenNews: () => setState(() => _index = 3),
+        );
       case 3:
-        return const NewsScreen();
+        return NewsAnnouncementsPage(onOpenProfile: _openProfile);
+      case 4:
+        return SettingsScreen(onOpenProfile: _openProfile);
       default:
         return const SizedBox.shrink();
     }
+  }
+}
+
+class _MunicipalityBottomNavigationBar extends StatelessWidget {
+  const _MunicipalityBottomNavigationBar({
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+  });
+
+  final int selectedIndex;
+  final ValueChanged<int> onDestinationSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final navigationTheme = NavigationBarThemeData(
+      height: 75,
+      backgroundColor: AppColors.background,
+      elevation: 0,
+      indicatorColor: const Color(0xFF002A1C),
+      indicatorShape: const StadiumBorder(),
+      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+      iconTheme: MaterialStateProperty.resolveWith((states) {
+        final selected = states.contains(MaterialState.selected);
+        return IconThemeData(
+          color: selected ? const Color(0xFF6C9380) : const Color(0xFF414844),
+          size: selected ? 22 : 24,
+        );
+      }),
+      labelTextStyle: MaterialStateProperty.resolveWith((states) {
+        final selected = states.contains(MaterialState.selected);
+        return TextStyle(
+          color: selected ? const Color(0xFF00120A) : const Color(0xFF414844),
+          fontSize: selected ? 11 : 10,
+          height: 1.45,
+          fontWeight: selected ? FontWeight.w800 : FontWeight.w400,
+        );
+      }),
+    );
+
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+      child: Center(
+        heightFactor: 1,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 512),
+          child: Container(
+            height: 77,
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: const Color(0x4DC1C8C2),
+              ),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x2600120A),
+                  blurRadius: 32,
+                  offset: Offset(0, 8),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: Theme(
+                data: Theme.of(context).copyWith(
+                  navigationBarTheme: navigationTheme,
+                ),
+                child: NavigationBar(
+                  selectedIndex: selectedIndex,
+                  onDestinationSelected: onDestinationSelected,
+                  destinations: const [
+                    NavigationDestination(
+                      icon: Icon(Icons.home_outlined),
+                      selectedIcon: Icon(Icons.home_rounded),
+                      label: 'الرئيسية',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.receipt_long_outlined),
+                      selectedIcon: Icon(Icons.receipt_long_rounded),
+                      label: 'المعاملات',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.chat_bubble_outline_rounded),
+                      selectedIcon: Icon(Icons.chat_bubble_rounded),
+                      label: 'الشكاوى',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.newspaper_outlined),
+                      selectedIcon: Icon(Icons.newspaper_rounded),
+                      label: 'الأخبار',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.settings_outlined),
+                      selectedIcon: Icon(Icons.settings_rounded),
+                      label: 'الإعدادات',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

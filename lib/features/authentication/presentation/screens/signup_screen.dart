@@ -484,35 +484,77 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                                         value == null ? 'اختر المحافظة' : null,
                                   ),
                                   const SizedBox(height: 16),
-                                  _SignupDropdownField<int>(
-                                    fieldKey: const ValueKey(
-                                      'signup_municipality_field',
+                                  if (_selectedGovernorateId != null &&
+                                      _municipalities.isNotEmpty)
+                                    _SignupDropdownField<int>(
+                                      fieldKey: const ValueKey(
+                                        'signup_municipality_field',
+                                      ),
+                                      label: 'البلدية التابع لها',
+                                      hint: _isLoadingMunicipalities
+                                          ? 'جاري تحميل البلديات...'
+                                          : 'اختر البلدية...',
+                                      value: _selectedMunicipalityId,
+                                      items: _municipalities
+                                          .map((item) => item.id)
+                                          .toList(growable: false),
+                                      itemLabel: (id) => _municipalities
+                                          .firstWhere((item) => item.id == id)
+                                          .name,
+                                      maxWidth: _signupFieldMaxWidth,
+                                      onChanged: _isLoading ||
+                                              _isLoadingMunicipalities
+                                          ? null
+                                          : (value) {
+                                              setState(() {
+                                                _selectedMunicipalityId = value;
+                                                _errorMessage = null;
+                                              });
+                                            },
+                                      validator: (value) =>
+                                          value == null ? 'اختر البلدية' : null,
+                                    )
+                                  else if (_selectedGovernorateId != null &&
+                                      _isLoadingMunicipalities)
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 12,
+                                      ),
+                                      child: SizedBox(
+                                        height: 46,
+                                        child: Center(
+                                          child: SizedBox(
+                                            width: 24,
+                                            height: 24,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2.5,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                Theme.of(context)
+                                                    .primaryColor,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  else
+                                    _SignupDropdownField<int>(
+                                      fieldKey: const ValueKey(
+                                        'signup_municipality_field',
+                                      ),
+                                      label: 'البلدية التابع لها',
+                                      hint: _selectedGovernorateId == null
+                                          ? 'اختر المحافظة أولاً...'
+                                          : 'اختر البلدية...',
+                                      value: _selectedMunicipalityId,
+                                      items: const [],
+                                      itemLabel: (id) => '',
+                                      maxWidth: _signupFieldMaxWidth,
+                                      onChanged: null,
+                                      validator: (value) =>
+                                          value == null ? 'اختر البلدية' : null,
                                     ),
-                                    label: 'البلدية التابع لها',
-                                    hint: _isLoadingMunicipalities
-                                        ? 'جاري تحميل البلديات...'
-                                        : 'اختر البلدية...',
-                                    value: _selectedMunicipalityId,
-                                    items: _municipalities
-                                        .map((item) => item.id)
-                                        .toList(growable: false),
-                                    itemLabel: (id) => _municipalities
-                                        .firstWhere((item) => item.id == id)
-                                        .name,
-                                    maxWidth: _signupFieldMaxWidth,
-                                    onChanged: _isLoading ||
-                                            _isLoadingMunicipalities ||
-                                            _selectedGovernorateId == null
-                                        ? null
-                                        : (value) {
-                                            setState(() {
-                                              _selectedMunicipalityId = value;
-                                              _errorMessage = null;
-                                            });
-                                          },
-                                    validator: (value) =>
-                                        value == null ? 'اختر البلدية' : null,
-                                  ),
                                 ],
                               ),
                             ),

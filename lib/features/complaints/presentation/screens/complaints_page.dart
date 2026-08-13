@@ -1,4 +1,3 @@
-
 // import 'package:flutter/material.dart';
 // import 'package:image_picker/image_picker.dart';
 
@@ -160,6 +159,8 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/constants/app_sizes.dart';
 import '../../../../core/constants/app_typography.dart';
+import '../../../../core/di.dart';
+import '../../../../core/network/api_exception.dart';
 import '../../data/complaints_repository.dart';
 import '../models/complaint_models.dart';
 import '../widgets/attachments_row.dart';
@@ -192,7 +193,8 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
       0; // 0 => بلاغ جديد (الوضع الافتراضي الأنسب عند فتح الصفحة)
   int _selectedCategoryIndex = 0;
   int _selectedFilterIndex = 0;
-  int _selectedPriorityIndex = 1; // 1 => عادية
+  int _selectedPriorityIndex =
+      1; // 1 => عادية (لا يُرسل للـ API حالياً، راجع الملاحظة أسفل _submitComplaint)
   double _mapScale = 1.0;
   bool _isLoading = false;
 
@@ -201,6 +203,12 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
   late final ImagePicker _picker;
   final List<XFile> _attachments = <XFile>[];
   late final List<CategoryItem> _categories;
+
+  static const List<int> _categoryIds = <int>[1, 2, 3, 4, 5, 6];
+
+  List<Complaint> _complaints = <Complaint>[];
+  bool _isLoadingComplaints = false;
+  String? _complaintsError;
 
   @override
   void initState() {
@@ -216,6 +224,7 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
       CategoryItem(label: 'نظافة', icon: Icons.restore_from_trash_rounded),
       CategoryItem(label: 'حدائق', icon: Icons.park_outlined),
     ];
+    _loadComplaints();
   }
 
   @override
@@ -223,6 +232,33 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
     _addressController.dispose();
     _descriptionController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadComplaints() async {
+    setState(() {
+      _isLoadingComplaints = true;
+      _complaintsError = null;
+    });
+    try {
+      final items = await DI.complaints.getComplaints();
+      if (!mounted) return;
+      setState(() {
+        _complaints = items;
+        _isLoadingComplaints = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingComplaints = false;
+        _complaintsError = error.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingComplaints = false;
+        _complaintsError = 'تعذر تحميل الشكاوى. حاول مرة أخرى.';
+      });
+    }
   }
 
   void _zoomIn() =>
@@ -253,31 +289,82 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
   // تحسين عملية إرسال البلاغ مع التحقق وحالة التحميل
   Future<void> _submitComplaint() async {
     // 1. التحقق من إدخال وصف المشكلة
-    if (_descriptionController.text.trim().isEmpty) {
+    final description = _descriptionController.text.trim();
+    if (description.isEmpty) {
       _showSnackBar('يرجى كتابة وصف المشكلة قبل الإرسال', isError: true);
+      return;
+    }
+
+    final address = _addressController.text.trim();
+    if (address.isEmpty) {
+      _showSnackBar('يرجى إدخال العنوان قبل الإرسال', isError: true);
+      return;
+    }
+
+    final municipalityId =
+        DI.auth.currentUser?.citizenProfile?['municipality_id'];
+    if (municipalityId == null) {
+      _showSnackBar(
+        'تعذر تحديد بلديتك. حاول تسجيل الدخول من جديد.',
+        isError: true,
+      );
       return;
     }
 
     setState(() => _isLoading = true);
 
-    // محاكاة إرسال للـ API (يمكنك استبدالها برابط السيرفر الحقيقي)
-    await Future<void>.delayed(const Duration(seconds: 2));
+    try {
+      final attachments = await Future.wait(
+        _attachments.map(
+          (file) async => NewComplaintAttachment(
+            fileName: file.name,
+            bytes: await file.readAsBytes(),
+          ),
+        ),
+      );
 
-    if (!mounted) return;
+      await DI.complaints.createAndSubmitComplaint(
+        NewComplaintInput(
+          municipalityId: municipalityId is int
+              ? municipalityId
+              : int.parse(municipalityId.toString()),
+          categoryId: _categoryIds[_selectedCategoryIndex],
+          title: 'بلاغ ${_categories[_selectedCategoryIndex].label}',
+          description: description,
+          textLocation: address,
+          latitude: 0.0,
+          longitude: 0.0,
+          attachments: attachments,
+        ),
+      );
 
-    setState(() {
-      _isLoading = false;
-      _descriptionController.clear();
-      _addressController.clear();
-      _attachments.clear();
-      _selectedCategoryIndex = 0;
-      _selectedPriorityIndex = 1;
-    });
+      if (!mounted) return;
 
-    _showSnackBar('تم إرسال البلاغ بنجاح، يمكنك متابعة حالته من قائمة الشكاوى');
+      setState(() {
+        _isLoading = false;
+        _descriptionController.clear();
+        _addressController.clear();
+        _attachments.clear();
+        _selectedCategoryIndex = 0;
+        _selectedPriorityIndex = 1;
+        _selectedModeIndex = 1; 
+      });
+
+      _showSnackBar(
+        'تم إرسال البلاغ بنجاح، يمكنك متابعة حالته من قائمة الشكاوى',
+      );
+      await _loadComplaints();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _showSnackBar(error.message, isError: true);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _showSnackBar('حدث خطأ غير متوقع أثناء إرسال البلاغ.', isError: true);
+    }
   }
 
-  // دالة إظهار الـ SnackBar المطور
   void _showSnackBar(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -327,9 +414,6 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final ComplaintsRepository repo = const ComplaintsRepository();
-    final List<Complaint> complaints = repo.getComplaints();
-
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -358,8 +442,10 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
                   firstLabel: 'بلاغ جديد',
                   secondLabel: 'شكاوي',
                   selectedIndex: _selectedModeIndex,
-                  onChanged: (int index) =>
-                      setState(() => _selectedModeIndex = index),
+                  onChanged: (int index) {
+                    setState(() => _selectedModeIndex = index);
+                    if (index == 1) _loadComplaints();
+                  },
                 ),
 
                 if (_selectedModeIndex == 0) ...<Widget>[
@@ -461,17 +547,42 @@ class _ComplaintsPageState extends State<ComplaintsPage> {
                 ] else ...<Widget>[
                   const SizedBox(height: 12),
 
-                  // شاشة قائمة الشكاوى المسبقة
+                  // شاشة قائمة الشكاوى
                   ComplaintsFilterRow(
                     selectedIndex: _selectedFilterIndex,
                     onSelected: (int idx) =>
                         setState(() => _selectedFilterIndex = idx),
                   ),
                   const SizedBox(height: 12),
-                  ComplaintsListView(
-                    filterIndex: _selectedFilterIndex,
-                    items: complaints,
-                  ),
+                  if (_isLoadingComplaints)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 40),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_complaintsError != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Column(
+                        children: <Widget>[
+                          Text(
+                            _complaintsError!,
+                            textAlign: TextAlign.center,
+                            style: AppTypography.bodyRegular13()
+                                .copyWith(color: AppColors.danger),
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton(
+                            onPressed: _loadComplaints,
+                            child: const Text('إعادة المحاولة'),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    ComplaintsListView(
+                      filterIndex: _selectedFilterIndex,
+                      items: _complaints,
+                    ),
                 ],
               ],
             ),

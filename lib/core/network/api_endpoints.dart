@@ -19,4 +19,24 @@ abstract final class ApiEndpoints {
 
   // Citizen
   static const String uploadIdentityPhotos = 'citizen/identity-photos';
+  
+  // Citizen complaints
+  static const String citizenComplaints = 'citizen/complaints';
+  static const String citizenComplaintDrafts = 'citizen/complaints/drafts';
+
+  static String citizenComplaintById(int complaintId) {
+    return 'citizen/complaints/$complaintId';
+  }
+
+  static String citizenComplaintImages(int complaintId) {
+    return 'citizen/complaints/$complaintId/images';
+  }
+
+  static String citizenComplaintSubmit(int complaintId) {
+    return 'citizen/complaints/$complaintId/submit';
+  }
+
+  static String citizenComplaintImage(int complaintId, int imageId) {
+    return 'citizen/complaints/$complaintId/images/$imageId';
+  }
 }

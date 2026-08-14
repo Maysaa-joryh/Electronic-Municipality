@@ -3,6 +3,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:electronic_municipality/core/repositories/auth_repository.dart';
+import 'package:electronic_municipality/features/authentication/data/auth_repository_fake.dart';
 import 'package:electronic_municipality/features/complaints/data/models/complaint_models.dart';
 import 'package:electronic_municipality/features/complaints/domain/complaints_repository.dart';
 import 'package:electronic_municipality/features/complaints/presentation/screens/complaint_location_picker_screen.dart';
@@ -109,6 +111,64 @@ void main() {
     expect(
       find.byKey(const ValueKey('delete_complaint_51')),
       findsNothing,
+    );
+  });
+
+  testWidgets('unverified citizen sees notice and cannot submit', (
+    WidgetTester tester,
+  ) async {
+    final repository = _ComplaintsRepositoryFake();
+    final authRepository = AuthRepositoryFake(
+      currentUser: const AuthUser(
+        id: 1,
+        fullName: 'مواطن غير موثق',
+        email: 'citizen@example.sy',
+        phoneNumber: '0990000000',
+        roles: <String>['citizen'],
+        accountType: 'citizen',
+        citizenProfile: <String, dynamic>{
+          'is_verified': false,
+          'municipality_id': 12,
+        },
+      ),
+    );
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ComplaintsScreen(
+            repository: repository,
+            authRepository: authRepository,
+            municipalityId: 12,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('citizen_verification_notice')),
+      findsOneWidget,
+    );
+    expect(find.text('حساب المواطن غير موثق'), findsOneWidget);
+
+    final submit = find.byKey(const ValueKey('submit_complaint'));
+    await tester.dragUntilVisible(
+      submit,
+      find.byType(ListView),
+      const Offset(0, -220),
+    );
+    await tester.tap(submit);
+    await tester.pumpAndSettle();
+
+    expect(repository.mutations, isEmpty);
+    expect(
+      find.text(
+        'حساب المواطن غير موثق. يجب توثيق الحساب قبل إرسال الشكوى.',
+      ),
+      findsOneWidget,
     );
   });
 }

@@ -132,6 +132,7 @@ class ComplaintReport {
           : ComplaintCategory(
               id: _requiredInt(categoryJson, 'id'),
               name: _requiredString(categoryJson, 'name'),
+              parentId: _nullableInt(categoryJson['parent_id']),
               key: _nullableString(categoryJson['key']),
             ),
       title: _nullableString(json['title']),

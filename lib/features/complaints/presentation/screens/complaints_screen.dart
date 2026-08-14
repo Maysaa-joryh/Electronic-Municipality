@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../../app/router.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/di.dart';
 import '../../../../core/network/api_exception.dart';
+import '../../../../core/repositories/auth_repository.dart';
+import '../../../../shared/widgets/citizen_verification_notice.dart';
 import '../../../../shared/widgets/municipality_widgets.dart';
 import '../../data/models/complaint_models.dart';
 import '../../domain/complaints_repository.dart';
@@ -19,12 +22,14 @@ class ComplaintsScreen extends StatefulWidget {
   const ComplaintsScreen({
     super.key,
     this.repository,
+    this.authRepository,
     this.municipalityId,
     this.imagePicker,
     this.locationSelector,
   });
 
   final ComplaintsRepository? repository;
+  final AuthRepository? authRepository;
   final int? municipalityId;
   final ComplaintImagePicker? imagePicker;
   final ComplaintLocationSelector? locationSelector;
@@ -42,7 +47,9 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
   final _devicePicker = ImagePicker();
 
   late final ComplaintsRepository _repository;
-  late final int? _municipalityId;
+  late final AuthRepository _authRepository;
+  int? _municipalityId;
+  CitizenVerificationStatus? _verificationStatus;
   List<ComplaintCategory> _categories = const [];
   List<ComplaintReport> _reports = const [];
   List<ComplaintAttachment> _pendingImages = const [];
@@ -60,7 +67,13 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
   void initState() {
     super.initState();
     _repository = widget.repository ?? DI.complaints;
-    _municipalityId = widget.municipalityId ?? _profileMunicipalityId();
+    _authRepository = widget.authRepository ?? DI.auth;
+    final currentUser = _authRepository.currentUser;
+    _municipalityId =
+        widget.municipalityId ?? _municipalityIdFromUser(currentUser);
+    _verificationStatus = currentUser?.isCitizen == true
+        ? currentUser!.citizenVerificationStatus
+        : null;
     _load();
   }
 
@@ -79,30 +92,66 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
       _loading = true;
       _pageError = null;
     });
+    final errors = <String>{};
+
     try {
-      final categoriesFuture = _repository.getCategories();
-      final reportsFuture = _repository.getReports();
-      final categories = await categoriesFuture;
-      final reports = await reportsFuture;
+      final categories = await _repository.getCategories();
       if (!mounted) return;
       setState(() {
         _categories = categories;
-        _reports = reports;
         _categoryGroupId = _groupIdForCategory(categories, _categoryId);
       });
     } catch (error, stackTrace) {
-      debugPrint('LOAD COMPLAINTS ERROR: $error');
+      debugPrint('LOAD COMPLAINT CATEGORIES ERROR: $error');
       debugPrintStack(stackTrace: stackTrace);
-      if (mounted) setState(() => _pageError = _messageFor(error));
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      errors.add(_messageFor(error));
+    }
+
+    try {
+      final reports = await _repository.getReports();
+      if (!mounted) return;
+      setState(() => _reports = reports);
+    } catch (error, stackTrace) {
+      debugPrint('LOAD COMPLAINT REPORTS ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      errors.add(_messageFor(error));
+    }
+
+    await _refreshVerificationStatus();
+    if (!mounted) return;
+    setState(() {
+      _pageError = errors.isEmpty ? null : errors.join('\n');
+      _loading = false;
+    });
+  }
+
+  Future<void> _refreshVerificationStatus() async {
+    final currentUser = _authRepository.currentUser;
+    if (currentUser == null || !currentUser.isCitizen) return;
+
+    try {
+      final user = await _authRepository.getCurrentUser();
+      if (!mounted) return;
+      setState(() {
+        _verificationStatus = user.citizenVerificationStatus;
+        _municipalityId =
+            widget.municipalityId ?? _municipalityIdFromUser(user);
+      });
+    } catch (error, stackTrace) {
+      debugPrint('LOAD CITIZEN VERIFICATION ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
     }
   }
 
   Future<void> _refreshReports() async {
     try {
       final reports = await _repository.getReports();
-      if (mounted) setState(() => _reports = reports);
+      if (mounted) {
+        setState(() {
+          _reports = reports;
+          _pageError = null;
+        });
+      }
     } catch (error) {
       if (mounted) setState(() => _pageError = _messageFor(error));
     }
@@ -120,6 +169,16 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
 
   Future<void> _save({required bool submit}) async {
     if (_busy) return;
+    if (submit &&
+        _verificationStatus != null &&
+        _verificationStatus != CitizenVerificationStatus.verified) {
+      setState(() {
+        _formError = _verificationMessage(_verificationStatus!);
+        _fieldErrors = const {};
+        _pageError = null;
+      });
+      return;
+    }
     final input = _input();
     final errors =
         submit ? input.submissionErrors() : const <String, List<String>>{};
@@ -135,6 +194,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
       _busy = true;
       _formError = null;
       _fieldErrors = const {};
+      _pageError = null;
     });
     try {
       final currentDraft = _draft;
@@ -152,12 +212,11 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
 
       if (_pendingImages.isNotEmpty) {
         await _repository.uploadImages(report: report, images: _pendingImages);
+        if (!mounted) return;
+        setState(() => _pendingImages = const []);
         report = await _repository.getReport(report.id);
         if (!mounted) return;
-        setState(() {
-          _draft = report;
-          _pendingImages = const [];
-        });
+        setState(() => _draft = report);
       }
 
       if (submit) {
@@ -177,7 +236,18 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
       setState(() {
         _formError = _messageFor(error);
         _fieldErrors = error is ApiException ? error.errors : const {};
+        if (error is ApiException && error.requiresCitizenVerification) {
+          final cachedStatus = _authRepository
+              .currentUser?.citizenVerificationStatus;
+          _verificationStatus =
+              cachedStatus == CitizenVerificationStatus.pending
+                  ? CitizenVerificationStatus.pending
+                  : CitizenVerificationStatus.notSubmitted;
+        }
       });
+      if (error is ApiException && error.requiresCitizenVerification) {
+        await _refreshVerificationStatus();
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -374,12 +444,17 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
     return values == null || values.isEmpty ? null : values.first;
   }
 
-  int? _profileMunicipalityId() {
-    final profile = DI.auth.currentUser?.citizenProfile;
+  static int? _municipalityIdFromUser(AuthUser? user) {
+    final profile = user?.citizenProfile;
     final direct = _asInt(profile?['municipality_id']);
     if (direct != null) return direct;
     final municipality = profile?['municipality'];
     return municipality is Map ? _asInt(municipality['id']) : null;
+  }
+
+  Future<void> _openVerification() async {
+    await Navigator.of(context).pushNamed(AppRoutes.profile);
+    if (mounted) await _refreshVerificationStatus();
   }
 
   void _success(String message) {
@@ -404,6 +479,17 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
             subtitle: 'أنشئ مسودة، أرفق الصور، ثم أرسلها للبلدية',
             dense: true,
           ),
+          if (_verificationStatus != null &&
+              _verificationStatus != CitizenVerificationStatus.verified) ...[
+            const SizedBox(height: 14),
+            CitizenVerificationNotice(
+              status: _verificationStatus!,
+              onAction:
+                  _verificationStatus == CitizenVerificationStatus.pending
+                      ? _refreshVerificationStatus
+                      : _openVerification,
+            ),
+          ],
           const SizedBox(height: 16),
           Row(children: [
             Expanded(
@@ -946,6 +1032,13 @@ Color _statusColor(String key) {
 String _messageFor(Object error) => error is ApiException
     ? error.message
     : 'تعذر إكمال العملية. حاول مرة أخرى.';
+
+String _verificationMessage(CitizenVerificationStatus status) {
+  if (status == CitizenVerificationStatus.pending) {
+    return 'طلب توثيق حسابك قيد المراجعة. يمكنك إرسال الشكوى بعد اعتماد الطلب من البلدية.';
+  }
+  return 'حساب المواطن غير موثق. يجب توثيق الحساب قبل إرسال الشكوى.';
+}
 
 double? _coordinate(String value) =>
     double.tryParse(value.trim().replaceAll(',', '.'));

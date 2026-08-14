@@ -1,0 +1,1403 @@
+diff --git a/lib/core/config/api_config.dart b/lib/core/config/api_config.dart
+index f07d557..0cc9ab2 100644
+--- a/lib/core/config/api_config.dart
++++ b/lib/core/config/api_config.dart
+@@ -57,4 +57,43 @@ class ApiConfig {
+         .replace(path: normalizedPath, query: null, fragment: null)
+         .toString();
+   }
++
++  /// Resolves backend-generated asset URLs against the configured API host.
++  ///
++  /// Laravel commonly emits `http://localhost/storage/...` in development.
++  /// On a physical phone, `localhost` points to the phone itself, so local
++  /// hosts are replaced with the host and port from [baseUrl].
++  static String resolveServerUrl(String value) {
++    var normalized = value.trim();
++    final markdownLink = RegExp(r'^\[[^\]]+\]\(([^)]+)\)$')
++        .firstMatch(normalized);
++    if (markdownLink != null) {
++      normalized = markdownLink.group(1)!.trim();
++    }
++
++    final origin = Uri.parse(normalizedBaseUrl).replace(
++      path: '/',
++      query: null,
++      fragment: null,
++    );
++    final uri = Uri.tryParse(normalized);
++    if (uri == null) return normalized;
++
++    if (!uri.hasScheme || uri.host.isEmpty) {
++      return origin.resolveUri(uri).toString();
++    }
++
++    const localHosts = <String>{'localhost', '127.0.0.1', '10.0.2.2'};
++    if (localHosts.contains(uri.host.toLowerCase())) {
++      return origin
++          .replace(
++            path: uri.path,
++            query: uri.hasQuery ? uri.query : null,
++            fragment: uri.hasFragment ? uri.fragment : null,
++          )
++          .toString();
++    }
++
++    return uri.toString();
++  }
+ }
+diff --git a/lib/features/complaints/data/models/complaint_models.dart b/lib/features/complaints/data/models/complaint_models.dart
+index 72dce5c..aa7d280 100644
+--- a/lib/features/complaints/data/models/complaint_models.dart
++++ b/lib/features/complaints/data/models/complaint_models.dart
+@@ -1,5 +1,6 @@
+ import 'dart:typed_data';
+ 
++import '../../../../core/config/api_config.dart';
+ import '../../../../core/network/api_exception.dart';
+ 
+ class ComplaintCategory {
+@@ -36,6 +37,8 @@ class ComplaintStatus {
+   const ComplaintStatus({
+     required this.key,
+     required this.label,
++    this.id,
++    this.isTerminal,
+   });
+ 
+   factory ComplaintStatus.fromJson(Object? value) {
+@@ -55,11 +58,15 @@ class ComplaintStatus {
+       label: _nullableString(json['label']) ??
+           _nullableString(json['name']) ??
+           key,
++      id: _nullableInt(json['id']),
++      isTerminal: _nullableBool(json['is_terminal']),
+     );
+   }
+ 
+   final String key;
+   final String label;
++  final int? id;
++  final bool? isTerminal;
+ 
+   bool get isDraft => key.toLowerCase() == 'draft';
+ }
+@@ -69,24 +76,32 @@ class ComplaintImage {
+     required this.id,
+     required this.url,
+     this.name,
++    this.mimeType,
++    this.fileSize,
+   });
+ 
+   factory ComplaintImage.fromJson(Map<String, dynamic> json) {
+     return ComplaintImage(
+       id: _requiredInt(json, 'id'),
+-      url: _requiredStringFromKeys(
+-        json,
+-        const <String>['url', 'view_url', 'image_url', 'path'],
++      url: ApiConfig.resolveServerUrl(
++        _requiredStringFromKeys(
++          json,
++          const <String>['url', 'view_url', 'image_url', 'path'],
++        ),
+       ),
+       name: _nullableString(json['name']) ??
+           _nullableString(json['file_name']) ??
+           _nullableString(json['original_name']),
++      mimeType: _nullableString(json['mime_type']),
++      fileSize: _nullableInt(json['file_size']),
+     );
+   }
+ 
+   final int id;
+   final String url;
+   final String? name;
++  final String? mimeType;
++  final int? fileSize;
+ }
+ 
+ class ComplaintReport {
+@@ -95,14 +110,20 @@ class ComplaintReport {
+     required this.status,
+     required this.images,
+     this.municipalityId,
++    this.municipalityName,
+     this.categoryId,
+     this.category,
++    this.complaintId,
+     this.title,
+     this.description,
+     this.textLocation,
+     this.latitude,
+     this.longitude,
+     this.serverCanEdit,
++    this.reportersCount,
++    this.isLinked,
++    this.submittedAt,
++    this.linkedAt,
+     this.createdAt,
+     this.updatedAt,
+   });
+@@ -120,6 +141,7 @@ class ComplaintReport {
+           .toList(growable: false),
+       municipalityId: _nullableInt(json['municipality_id']) ??
+           _nullableInt(municipalityJson?['id']),
++      municipalityName: _nullableString(municipalityJson?['name']),
+       categoryId:
+           _nullableInt(json['category_id']) ?? _nullableInt(categoryJson?['id']),
+       category: categoryJson == null
+@@ -131,11 +153,16 @@ class ComplaintReport {
+               key: _nullableString(categoryJson['key']),
+             ),
+       title: _nullableString(json['title']),
++      complaintId: _nullableInt(json['complaint_id']),
+       description: _nullableString(json['description']),
+       textLocation: _nullableString(json['text_location']),
+       latitude: _nullableDouble(json['latitude']),
+       longitude: _nullableDouble(json['longitude']),
+       serverCanEdit: _nullableBool(json['can_edit']),
++      reportersCount: _nullableInt(json['reporters_count']),
++      isLinked: _nullableBool(json['is_linked']),
++      submittedAt: _nullableDateTime(json['submitted_at']),
++      linkedAt: _nullableDateTime(json['linked_at']),
+       createdAt: _nullableDateTime(json['created_at']),
+       updatedAt: _nullableDateTime(json['updated_at']),
+     );
+@@ -145,8 +172,10 @@ class ComplaintReport {
+   final ComplaintStatus status;
+   final List<ComplaintImage> images;
+   final int? municipalityId;
++  final String? municipalityName;
+   final int? categoryId;
+   final ComplaintCategory? category;
++  final int? complaintId;
+   final String? title;
+   final String? description;
+   final String? textLocation;
+@@ -156,6 +185,10 @@ class ComplaintReport {
+   /// If the backend sends `can_edit`, it is the authority. The draft status is
+   /// used only as a compatibility fallback when that field is absent.
+   final bool? serverCanEdit;
++  final int? reportersCount;
++  final bool? isLinked;
++  final DateTime? submittedAt;
++  final DateTime? linkedAt;
+   final DateTime? createdAt;
+   final DateTime? updatedAt;
+ 
+diff --git a/complaint_details_work_20260814/lib/features/complaints/presentation/screens/complaint_details_screen.dart b/lib/features/complaints/presentation/screens/complaint_details_screen.dart
+new file mode 100644
+index 0000000..7c2182d
+--- /dev/null
++++ b/lib/features/complaints/presentation/screens/complaint_details_screen.dart
+@@ -0,0 +1,754 @@
++import 'package:flutter/material.dart';
++
++import '../../../../app/theme/app_colors.dart';
++import '../../../../core/network/api_exception.dart';
++import '../../../../shared/widgets/municipality_widgets.dart';
++import '../../data/models/complaint_models.dart';
++import '../../domain/complaints_repository.dart';
++
++class ComplaintDetailsScreen extends StatefulWidget {
++  const ComplaintDetailsScreen({
++    super.key,
++    required this.summary,
++    required this.repository,
++  });
++
++  final ComplaintReport summary;
++  final ComplaintsRepository repository;
++
++  @override
++  State<ComplaintDetailsScreen> createState() =>
++      _ComplaintDetailsScreenState();
++}
++
++class _ComplaintDetailsScreenState extends State<ComplaintDetailsScreen> {
++  late ComplaintReport _report;
++  bool _loading = true;
++  String? _error;
++
++  @override
++  void initState() {
++    super.initState();
++    _report = widget.summary;
++    _load();
++  }
++
++  Future<void> _load() async {
++    setState(() {
++      _loading = true;
++      _error = null;
++    });
++    try {
++      final report = await widget.repository.getReport(widget.summary.id);
++      if (!mounted) return;
++      setState(() => _report = report);
++    } catch (error, stackTrace) {
++      debugPrint('LOAD COMPLAINT DETAILS ERROR: $error');
++      debugPrintStack(stackTrace: stackTrace);
++      if (!mounted) return;
++      setState(() => _error = _messageFor(error));
++    } finally {
++      if (mounted) setState(() => _loading = false);
++    }
++  }
++
++  @override
++  Widget build(BuildContext context) {
++    return Scaffold(
++      key: const ValueKey('complaint_details_screen'),
++      backgroundColor: AppColors.background,
++      body: SafeArea(
++        child: Column(
++          children: [
++            _DetailsHeader(report: _report),
++            if (_loading)
++              const LinearProgressIndicator(
++                minHeight: 2,
++                color: AppColors.primary,
++              ),
++            Expanded(
++              child: RefreshIndicator(
++                onRefresh: _load,
++                color: AppColors.primary,
++                child: ListView(
++                  physics: const AlwaysScrollableScrollPhysics(),
++                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 32),
++                  children: [
++                    Center(
++                      child: ConstrainedBox(
++                        constraints: const BoxConstraints(maxWidth: 720),
++                        child: Column(
++                          crossAxisAlignment: CrossAxisAlignment.stretch,
++                          children: [
++                            if (_error != null) ...[
++                              _DetailsNotice(message: _error!, retry: _load),
++                              const SizedBox(height: 14),
++                            ],
++                            _SummaryCard(report: _report),
++                            const SizedBox(height: 14),
++                            _LocationCard(report: _report),
++                            const SizedBox(height: 14),
++                            _ImagesCard(images: _report.images),
++                            const SizedBox(height: 14),
++                            _TimelineCard(report: _report),
++                          ],
++                        ),
++                      ),
++                    ),
++                  ],
++                ),
++              ),
++            ),
++          ],
++        ),
++      ),
++    );
++  }
++}
++
++class _DetailsHeader extends StatelessWidget {
++  const _DetailsHeader({required this.report});
++
++  final ComplaintReport report;
++
++  @override
++  Widget build(BuildContext context) {
++    return Container(
++      padding: const EdgeInsets.fromLTRB(12, 10, 18, 12),
++      decoration: const BoxDecoration(
++        color: AppColors.surface,
++        border: Border(bottom: BorderSide(color: AppColors.divider)),
++      ),
++      child: Row(
++        children: [
++          IconButton(
++            key: const ValueKey('close_complaint_details'),
++            onPressed: () => Navigator.of(context).pop(),
++            icon: const Icon(Icons.arrow_forward_rounded),
++            tooltip: 'رجوع',
++          ),
++          const SizedBox(width: 4),
++          Expanded(
++            child: Column(
++              crossAxisAlignment: CrossAxisAlignment.start,
++              children: [
++                const Text(
++                  'تفاصيل الشكوى',
++                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
++                ),
++                const SizedBox(height: 2),
++                Text(
++                  'رقم البلاغ #${report.id}',
++                  style: const TextStyle(
++                    color: AppColors.muted,
++                    fontSize: 13,
++                  ),
++                ),
++              ],
++            ),
++          ),
++          StatusPill(
++            label: report.status.label,
++            color: _statusColor(report.status.key),
++            pale: true,
++          ),
++        ],
++      ),
++    );
++  }
++}
++
++class _SummaryCard extends StatelessWidget {
++  const _SummaryCard({required this.report});
++
++  final ComplaintReport report;
++
++  @override
++  Widget build(BuildContext context) {
++    return AppPanel(
++      padding: const EdgeInsets.all(18),
++      elevation: true,
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.stretch,
++        children: [
++          Row(
++            children: [
++              const CircleIcon(
++                icon: Icons.description_outlined,
++                size: 46,
++                color: Color(0xFFE1EEE8),
++              ),
++              const SizedBox(width: 12),
++              Expanded(
++                child: Column(
++                  crossAxisAlignment: CrossAxisAlignment.start,
++                  children: [
++                    Text(
++                      report.title ?? 'شكوى #${report.id}',
++                      key: const ValueKey('complaint_details_title'),
++                      style: const TextStyle(
++                        fontSize: 19,
++                        fontWeight: FontWeight.w900,
++                      ),
++                    ),
++                    if (report.category?.name != null) ...[
++                      const SizedBox(height: 3),
++                      Text(
++                        report.category!.name,
++                        key: const ValueKey('complaint_details_category'),
++                        style: const TextStyle(
++                          color: AppColors.primary,
++                          fontWeight: FontWeight.w700,
++                        ),
++                      ),
++                    ],
++                  ],
++                ),
++              ),
++            ],
++          ),
++          const SizedBox(height: 18),
++          const _CardLabel('وصف الشكوى'),
++          const SizedBox(height: 6),
++          Text(
++            report.description ?? 'لم يُضف وصف للشكوى.',
++            key: const ValueKey('complaint_details_description'),
++            style: TextStyle(
++              height: 1.65,
++              color: report.description == null
++                  ? AppColors.muted
++                  : AppColors.text,
++            ),
++          ),
++          if (report.municipalityName != null) ...[
++            const SizedBox(height: 16),
++            const Divider(height: 1, color: AppColors.divider),
++            const SizedBox(height: 14),
++            _InfoRow(
++              icon: Icons.account_balance_outlined,
++              label: 'البلدية',
++              value: report.municipalityName!,
++              valueKey: const ValueKey('complaint_details_municipality'),
++            ),
++          ],
++          if (report.complaintId != null) ...[
++            const SizedBox(height: 12),
++            _InfoRow(
++              icon: Icons.confirmation_number_outlined,
++              label: 'رقم الشكوى الموحدة',
++              value: '#${report.complaintId}',
++            ),
++          ],
++          if (report.reportersCount != null) ...[
++            const SizedBox(height: 12),
++            _InfoRow(
++              icon: Icons.groups_outlined,
++              label: 'عدد المبلّغين',
++              value: '${report.reportersCount}',
++            ),
++          ],
++        ],
++      ),
++    );
++  }
++}
++
++class _LocationCard extends StatelessWidget {
++  const _LocationCard({required this.report});
++
++  final ComplaintReport report;
++
++  @override
++  Widget build(BuildContext context) {
++    final hasCoordinates = report.latitude != null && report.longitude != null;
++    return AppPanel(
++      padding: const EdgeInsets.all(18),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.stretch,
++        children: [
++          const _SectionHeading(
++            icon: Icons.location_on_outlined,
++            title: 'موقع الشكوى',
++          ),
++          const SizedBox(height: 15),
++          _InfoRow(
++            icon: Icons.signpost_outlined,
++            label: 'وصف الموقع',
++            value: report.textLocation ?? 'لم يُضف وصف للموقع.',
++            valueKey: const ValueKey('complaint_details_text_location'),
++          ),
++          if (hasCoordinates) ...[
++            const SizedBox(height: 13),
++            Container(
++              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
++              decoration: BoxDecoration(
++                color: const Color(0xFFEAF4EF),
++                borderRadius: BorderRadius.circular(10),
++                border: Border.all(color: AppColors.primary.withOpacity(.12)),
++              ),
++              child: Row(
++                children: [
++                  const Icon(
++                    Icons.my_location_rounded,
++                    color: AppColors.primary,
++                    size: 20,
++                  ),
++                  const SizedBox(width: 10),
++                  Expanded(
++                    child: Text(
++                      '${report.latitude!.toStringAsFixed(7)}, '
++                      '${report.longitude!.toStringAsFixed(7)}',
++                      key: const ValueKey('complaint_details_coordinates'),
++                      textDirection: TextDirection.ltr,
++                      textAlign: TextAlign.center,
++                      style: const TextStyle(
++                        color: AppColors.primary,
++                        fontWeight: FontWeight.w800,
++                      ),
++                    ),
++                  ),
++                ],
++              ),
++            ),
++          ],
++        ],
++      ),
++    );
++  }
++}
++
++class _ImagesCard extends StatelessWidget {
++  const _ImagesCard({required this.images});
++
++  final List<ComplaintImage> images;
++
++  @override
++  Widget build(BuildContext context) {
++    return AppPanel(
++      padding: const EdgeInsets.all(18),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.stretch,
++        children: [
++          _SectionHeading(
++            icon: Icons.photo_library_outlined,
++            title: 'الصور المرفقة',
++            trailing: images.isEmpty ? null : '${images.length}',
++          ),
++          const SizedBox(height: 15),
++          if (images.isEmpty)
++            Container(
++              padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 16),
++              decoration: BoxDecoration(
++                color: AppColors.surfaceMuted,
++                borderRadius: BorderRadius.circular(10),
++              ),
++              child: const Column(
++                children: [
++                  Icon(
++                    Icons.hide_image_outlined,
++                    color: AppColors.subtle,
++                    size: 34,
++                  ),
++                  SizedBox(height: 8),
++                  Text(
++                    'لا توجد صور مرفقة بهذه الشكوى.',
++                    textAlign: TextAlign.center,
++                    style: TextStyle(color: AppColors.muted),
++                  ),
++                ],
++              ),
++            )
++          else
++            LayoutBuilder(
++              builder: (context, constraints) {
++                final columns = constraints.maxWidth >= 580 ? 3 : 2;
++                return GridView.builder(
++                  shrinkWrap: true,
++                  physics: const NeverScrollableScrollPhysics(),
++                  itemCount: images.length,
++                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
++                    crossAxisCount: columns,
++                    crossAxisSpacing: 10,
++                    mainAxisSpacing: 10,
++                    childAspectRatio: .82,
++                  ),
++                  itemBuilder: (context, index) {
++                    final image = images[index];
++                    return _ComplaintImageTile(image: image);
++                  },
++                );
++              },
++            ),
++        ],
++      ),
++    );
++  }
++}
++
++class _ComplaintImageTile extends StatelessWidget {
++  const _ComplaintImageTile({required this.image});
++
++  final ComplaintImage image;
++
++  @override
++  Widget build(BuildContext context) {
++    return Material(
++      color: AppColors.surfaceMuted,
++      borderRadius: BorderRadius.circular(11),
++      clipBehavior: Clip.antiAlias,
++      child: InkWell(
++        key: ValueKey('complaint_image_${image.id}'),
++        onTap: () => Navigator.of(context).push(
++          MaterialPageRoute<void>(
++            builder: (_) => _FullScreenImage(image: image),
++          ),
++        ),
++        child: Column(
++          crossAxisAlignment: CrossAxisAlignment.stretch,
++          children: [
++            Expanded(
++              child: Hero(
++                tag: 'complaint-image-${image.id}',
++                child: Image.network(
++                  image.url,
++                  key: ValueKey('complaint_image_network_${image.id}'),
++                  fit: BoxFit.cover,
++                  frameBuilder: (context, child, frame, synchronous) {
++                    if (frame != null || synchronous) return child;
++                    return const Center(
++                      child: CircularProgressIndicator(
++                        strokeWidth: 2,
++                        color: AppColors.primary,
++                      ),
++                    );
++                  },
++                  errorBuilder: (context, error, stackTrace) => const ColoredBox(
++                    color: AppColors.surfaceMuted,
++                    child: Center(
++                      child: Icon(
++                        Icons.broken_image_outlined,
++                        color: AppColors.subtle,
++                        size: 34,
++                      ),
++                    ),
++                  ),
++                ),
++              ),
++            ),
++            Padding(
++              padding: const EdgeInsets.fromLTRB(9, 8, 9, 9),
++              child: Column(
++                crossAxisAlignment: CrossAxisAlignment.stretch,
++                children: [
++                  Text(
++                    image.name ?? 'صورة #${image.id}',
++                    maxLines: 1,
++                    overflow: TextOverflow.ellipsis,
++                    style: const TextStyle(
++                      fontSize: 12,
++                      fontWeight: FontWeight.w700,
++                    ),
++                  ),
++                  if (image.fileSize != null) ...[
++                    const SizedBox(height: 2),
++                    Text(
++                      _formatBytes(image.fileSize!),
++                      textDirection: TextDirection.ltr,
++                      style: const TextStyle(
++                        color: AppColors.muted,
++                        fontSize: 11,
++                      ),
++                    ),
++                  ],
++                ],
++              ),
++            ),
++          ],
++        ),
++      ),
++    );
++  }
++}
++
++class _FullScreenImage extends StatelessWidget {
++  const _FullScreenImage({required this.image});
++
++  final ComplaintImage image;
++
++  @override
++  Widget build(BuildContext context) {
++    return Scaffold(
++      backgroundColor: const Color(0xFF07110E),
++      body: SafeArea(
++        child: Stack(
++          children: [
++            Positioned.fill(
++              child: InteractiveViewer(
++                minScale: .8,
++                maxScale: 4,
++                child: Center(
++                  child: Hero(
++                    tag: 'complaint-image-${image.id}',
++                    child: Image.network(
++                      image.url,
++                      fit: BoxFit.contain,
++                      errorBuilder: (context, error, stackTrace) => const Column(
++                        mainAxisSize: MainAxisSize.min,
++                        children: [
++                          Icon(
++                            Icons.broken_image_outlined,
++                            color: Colors.white70,
++                            size: 52,
++                          ),
++                          SizedBox(height: 10),
++                          Text(
++                            'تعذر تحميل الصورة.',
++                            style: TextStyle(color: Colors.white70),
++                          ),
++                        ],
++                      ),
++                    ),
++                  ),
++                ),
++              ),
++            ),
++            Positioned(
++              top: 10,
++              right: 10,
++              child: IconButton(
++                onPressed: () => Navigator.of(context).pop(),
++                style: IconButton.styleFrom(
++                  backgroundColor: Colors.black.withOpacity(.46),
++                  foregroundColor: Colors.white,
++                ),
++                icon: const Icon(Icons.close_rounded),
++                tooltip: 'إغلاق',
++              ),
++            ),
++          ],
++        ),
++      ),
++    );
++  }
++}
++
++class _TimelineCard extends StatelessWidget {
++  const _TimelineCard({required this.report});
++
++  final ComplaintReport report;
++
++  @override
++  Widget build(BuildContext context) {
++    final rows = <Widget>[];
++    void add(IconData icon, String label, DateTime? value) {
++      if (value == null) return;
++      if (rows.isNotEmpty) rows.add(const SizedBox(height: 12));
++      rows.add(_InfoRow(icon: icon, label: label, value: _formatDate(value)));
++    }
++
++    add(Icons.add_circle_outline, 'تاريخ الإنشاء', report.createdAt);
++    add(Icons.update_outlined, 'آخر تحديث', report.updatedAt);
++    add(Icons.send_outlined, 'تاريخ الإرسال', report.submittedAt);
++    add(Icons.link_outlined, 'تاريخ الربط', report.linkedAt);
++
++    return AppPanel(
++      padding: const EdgeInsets.all(18),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.stretch,
++        children: [
++          const _SectionHeading(
++            icon: Icons.history_rounded,
++            title: 'معلومات زمنية',
++          ),
++          const SizedBox(height: 15),
++          if (rows.isEmpty)
++            const Text(
++              'لا توجد معلومات زمنية متاحة.',
++              style: TextStyle(color: AppColors.muted),
++            )
++          else
++            ...rows,
++        ],
++      ),
++    );
++  }
++}
++
++class _SectionHeading extends StatelessWidget {
++  const _SectionHeading({
++    required this.icon,
++    required this.title,
++    this.trailing,
++  });
++
++  final IconData icon;
++  final String title;
++  final String? trailing;
++
++  @override
++  Widget build(BuildContext context) {
++    return Row(
++      children: [
++        Container(
++          width: 38,
++          height: 38,
++          decoration: const BoxDecoration(
++            color: Color(0xFFE1EEE8),
++            shape: BoxShape.circle,
++          ),
++          child: Icon(icon, color: AppColors.primary, size: 21),
++        ),
++        const SizedBox(width: 10),
++        Expanded(
++          child: Text(
++            title,
++            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
++          ),
++        ),
++        if (trailing != null)
++          Container(
++            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
++            decoration: BoxDecoration(
++              color: AppColors.surfaceMuted,
++              borderRadius: BorderRadius.circular(20),
++            ),
++            child: Text(
++              trailing!,
++              style: const TextStyle(
++                color: AppColors.primary,
++                fontWeight: FontWeight.w800,
++              ),
++            ),
++          ),
++      ],
++    );
++  }
++}
++
++class _InfoRow extends StatelessWidget {
++  const _InfoRow({
++    required this.icon,
++    required this.label,
++    required this.value,
++    this.valueKey,
++  });
++
++  final IconData icon;
++  final String label;
++  final String value;
++  final Key? valueKey;
++
++  @override
++  Widget build(BuildContext context) {
++    return Row(
++      crossAxisAlignment: CrossAxisAlignment.start,
++      children: [
++        Icon(icon, size: 19, color: AppColors.primary),
++        const SizedBox(width: 9),
++        SizedBox(
++          width: 94,
++          child: Text(
++            label,
++            style: const TextStyle(color: AppColors.muted, fontSize: 13),
++          ),
++        ),
++        const SizedBox(width: 6),
++        Expanded(
++          child: Text(
++            value,
++            key: valueKey,
++            style: const TextStyle(fontWeight: FontWeight.w700, height: 1.4),
++          ),
++        ),
++      ],
++    );
++  }
++}
++
++class _CardLabel extends StatelessWidget {
++  const _CardLabel(this.value);
++
++  final String value;
++
++  @override
++  Widget build(BuildContext context) {
++    return Text(
++      value,
++      style: const TextStyle(
++        color: AppColors.muted,
++        fontSize: 13,
++        fontWeight: FontWeight.w700,
++      ),
++    );
++  }
++}
++
++class _DetailsNotice extends StatelessWidget {
++  const _DetailsNotice({required this.message, required this.retry});
++
++  final String message;
++  final VoidCallback retry;
++
++  @override
++  Widget build(BuildContext context) {
++    return Container(
++      padding: const EdgeInsets.all(13),
++      decoration: BoxDecoration(
++        color: AppColors.danger.withOpacity(.08),
++        borderRadius: BorderRadius.circular(11),
++        border: Border.all(color: AppColors.danger.withOpacity(.28)),
++      ),
++      child: Row(
++        children: [
++          const Icon(Icons.error_outline, color: AppColors.danger),
++          const SizedBox(width: 9),
++          Expanded(
++            child: Text(
++              message,
++              style: const TextStyle(
++                color: AppColors.danger,
++                fontWeight: FontWeight.w700,
++              ),
++            ),
++          ),
++          TextButton(onPressed: retry, child: const Text('إعادة المحاولة')),
++        ],
++      ),
++    );
++  }
++}
++
++String _formatDate(DateTime value) {
++  final local = value.toLocal();
++  String two(int number) => number.toString().padLeft(2, '0');
++  return '${local.year}/${two(local.month)}/${two(local.day)} – '
++      '${two(local.hour)}:${two(local.minute)}';
++}
++
++String _formatBytes(int bytes) {
++  if (bytes < 1024) return '$bytes B';
++  final kilobytes = bytes / 1024;
++  if (kilobytes < 1024) return '${kilobytes.toStringAsFixed(1)} KB';
++  return '${(kilobytes / 1024).toStringAsFixed(1)} MB';
++}
++
++Color _statusColor(String key) {
++  switch (key.toLowerCase()) {
++    case 'draft':
++      return AppColors.gold;
++    case 'resolved':
++    case 'closed':
++      return AppColors.success;
++    case 'rejected':
++      return AppColors.danger;
++    case 'submitted':
++    case 'in_progress':
++      return AppColors.info;
++    default:
++      return AppColors.primary;
++  }
++}
++
++String _messageFor(Object error) => error is ApiException
++    ? error.message
++    : 'تعذر تحميل أحدث تفاصيل الشكوى. اسحب للأسفل للمحاولة مجددًا.';
+diff --git a/lib/features/complaints/presentation/screens/complaints_screen.dart b/lib/features/complaints/presentation/screens/complaints_screen.dart
+index ddc3c5f..5fad2e1 100644
+--- a/lib/features/complaints/presentation/screens/complaints_screen.dart
++++ b/lib/features/complaints/presentation/screens/complaints_screen.dart
+@@ -10,6 +10,7 @@ import '../../../../shared/widgets/citizen_verification_notice.dart';
+ import '../../../../shared/widgets/municipality_widgets.dart';
+ import '../../data/models/complaint_models.dart';
+ import '../../domain/complaints_repository.dart';
++import 'complaint_details_screen.dart';
+ import 'complaint_location_picker_screen.dart';
+ 
+ typedef ComplaintImagePicker = Future<List<ComplaintAttachment>> Function();
+@@ -346,6 +347,18 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+     }
+   }
+ 
++  Future<void> _openDetails(ComplaintReport report) async {
++    await Navigator.of(context).push<void>(
++      MaterialPageRoute<void>(
++        builder: (_) => ComplaintDetailsScreen(
++          summary: report,
++          repository: _repository,
++        ),
++      ),
++    );
++    if (mounted) await _refreshReports();
++  }
++
+   Future<void> _deleteDraft(ComplaintReport report) async {
+     final confirmed = await showDialog<bool>(
+       context: context,
+@@ -740,6 +753,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+           for (var index = 0; index < _reports.length; index++) ...[
+             _ComplaintTile(
+               report: _reports[index],
++              onOpen: () => _openDetails(_reports[index]),
+               onEdit:
+                   _reports[index].canEdit ? () => _edit(_reports[index]) : null,
+               onDelete: _reports[index].canEdit
+@@ -754,55 +768,102 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+ }
+ 
+ class _ComplaintTile extends StatelessWidget {
+-  const _ComplaintTile({required this.report, this.onEdit, this.onDelete});
++  const _ComplaintTile({
++    required this.report,
++    required this.onOpen,
++    this.onEdit,
++    this.onDelete,
++  });
+   final ComplaintReport report;
++  final VoidCallback onOpen;
+   final VoidCallback? onEdit;
+   final VoidCallback? onDelete;
+ 
+   @override
+   Widget build(BuildContext context) {
+-    return Container(
+-      padding: const EdgeInsets.all(14),
+-      decoration: BoxDecoration(
+-          color: AppColors.surfaceMuted,
+-          borderRadius: BorderRadius.circular(10)),
+-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+-          Expanded(
+-              child: Text(report.title ?? 'شكوى #${report.id}',
+-                  style: const TextStyle(fontWeight: FontWeight.w800))),
+-          StatusPill(
+-              label: report.status.label,
+-              color: _statusColor(report.status.key),
+-              pale: true),
+-        ]),
+-        if (report.description != null) ...[
+-          const SizedBox(height: 7),
+-          Text(report.description!,
+-              maxLines: 2,
+-              overflow: TextOverflow.ellipsis,
+-              style: const TextStyle(color: AppColors.muted)),
+-        ],
+-        const SizedBox(height: 6),
+-        Row(children: [
+-          Text('#${report.id}',
+-              style: const TextStyle(color: AppColors.subtle)),
+-          const Spacer(),
+-          if (onEdit != null)
+-            TextButton.icon(
+-              key: ValueKey('edit_complaint_${report.id}'),
+-              onPressed: onEdit,
+-              icon: const Icon(Icons.edit_outlined, size: 18),
+-              label: const Text('تعديل'),
+-            ),
+-          if (onDelete != null)
+-            IconButton(
+-              key: ValueKey('delete_complaint_${report.id}'),
+-              onPressed: onDelete,
+-              icon: const Icon(Icons.delete_outline, color: AppColors.danger),
+-            ),
+-        ]),
+-      ]),
++    return Material(
++      color: AppColors.surfaceMuted,
++      borderRadius: BorderRadius.circular(10),
++      clipBehavior: Clip.antiAlias,
++      child: InkWell(
++        key: ValueKey('open_complaint_${report.id}'),
++        onTap: onOpen,
++        child: Padding(
++          padding: const EdgeInsets.all(14),
++          child: Column(
++            crossAxisAlignment: CrossAxisAlignment.stretch,
++            children: [
++              Row(
++                crossAxisAlignment: CrossAxisAlignment.start,
++                children: [
++                  Expanded(
++                    child: Text(
++                      report.title ?? 'شكوى #${report.id}',
++                      style: const TextStyle(fontWeight: FontWeight.w800),
++                    ),
++                  ),
++                  StatusPill(
++                    label: report.status.label,
++                    color: _statusColor(report.status.key),
++                    pale: true,
++                  ),
++                ],
++              ),
++              if (report.description != null) ...[
++                const SizedBox(height: 7),
++                Text(
++                  report.description!,
++                  maxLines: 2,
++                  overflow: TextOverflow.ellipsis,
++                  style: const TextStyle(color: AppColors.muted),
++                ),
++              ],
++              const SizedBox(height: 6),
++              Row(
++                children: [
++                  Text(
++                    '#${report.id}',
++                    style: const TextStyle(color: AppColors.subtle),
++                  ),
++                  const SizedBox(width: 8),
++                  const Icon(
++                    Icons.photo_library_outlined,
++                    size: 16,
++                    color: AppColors.subtle,
++                  ),
++                  const SizedBox(width: 4),
++                  Text(
++                    '${report.images.length}',
++                    style: const TextStyle(color: AppColors.subtle),
++                  ),
++                  const Spacer(),
++                  if (onEdit != null)
++                    TextButton.icon(
++                      key: ValueKey('edit_complaint_${report.id}'),
++                      onPressed: onEdit,
++                      icon: const Icon(Icons.edit_outlined, size: 18),
++                      label: const Text('تعديل'),
++                    ),
++                  if (onDelete != null)
++                    IconButton(
++                      key: ValueKey('delete_complaint_${report.id}'),
++                      onPressed: onDelete,
++                      icon: const Icon(
++                        Icons.delete_outline,
++                        color: AppColors.danger,
++                      ),
++                    ),
++                  const SizedBox(width: 2),
++                  const Icon(
++                    Icons.chevron_left_rounded,
++                    color: AppColors.primary,
++                  ),
++                ],
++              ),
++            ],
++          ),
++        ),
++      ),
+     );
+   }
+ }
+diff --git a/test/features/complaints/complaint_contract_test.dart b/test/features/complaints/complaint_contract_test.dart
+index 10d4f54..2a242f2 100644
+--- a/test/features/complaints/complaint_contract_test.dart
++++ b/test/features/complaints/complaint_contract_test.dart
+@@ -3,6 +3,7 @@ import 'dart:typed_data';
+ import 'package:dio/dio.dart';
+ import 'package:flutter_test/flutter_test.dart';
+ 
++import 'package:electronic_municipality/core/config/api_config.dart';
+ import 'package:electronic_municipality/core/network/api_exception.dart';
+ import 'package:electronic_municipality/features/complaints/data/complaint_endpoints.dart';
+ import 'package:electronic_municipality/features/complaints/data/models/complaint_models.dart';
+@@ -127,6 +128,86 @@ void main() {
+     );
+   });
+ 
++  test('report model matches the complete citizen complaints response item', () {
++    final report = ComplaintReport.fromJson(
++      <String, dynamic>{
++        'id': 34,
++        'complaint_id': null,
++        'title': 'عمود إنارة',
++        'description': 'العمود متضرر ويحتاج إلى صيانة',
++        'text_location': 'قرب الحديقة العامة',
++        'latitude': '33.4728700',
++        'longitude': '36.2497910',
++        'municipality': <String, dynamic>{
++          'id': 1,
++          'name': 'بلدية كفرسوسة',
++        },
++        'category': <String, dynamic>{
++          'id': 13,
++          'name': 'عمود إنارة متضرر',
++          'parent_id': 11,
++        },
++        'status': <String, dynamic>{
++          'id': 2,
++          'key': 'submitted',
++          'name': 'تم الإرسال',
++          'is_terminal': false,
++        },
++        'images': <Map<String, dynamic>>[
++          <String, dynamic>{
++            'id': 5,
++            'original_name': 'scaled_125865.jpg',
++            'mime_type': 'image/jpeg',
++            'file_size': 149020,
++            'view_url':
++                'http://localhost/storage/complaint-reports/34/image.jpg',
++          },
++        ],
++        'reporters_count': null,
++        'is_linked': false,
++        'can_edit': false,
++        'submitted_at': '2026-08-14T15:45:23.000000Z',
++        'linked_at': null,
++        'created_at': '2026-08-14T15:45:21.000000Z',
++        'updated_at': '2026-08-14T15:45:23.000000Z',
++      },
++    );
++
++    expect(report.id, 34);
++    expect(report.municipalityId, 1);
++    expect(report.municipalityName, 'بلدية كفرسوسة');
++    expect(report.categoryId, 13);
++    expect(report.category?.parentId, 11);
++    expect(report.status.id, 2);
++    expect(report.status.label, 'تم الإرسال');
++    expect(report.status.isTerminal, isFalse);
++    expect(report.canEdit, isFalse);
++    expect(report.isLinked, isFalse);
++    expect(report.submittedAt, DateTime.parse('2026-08-14T15:45:23Z'));
++    expect(report.images.single.name, 'scaled_125865.jpg');
++    expect(report.images.single.mimeType, 'image/jpeg');
++    expect(report.images.single.fileSize, 149020);
++
++    final imageUri = Uri.parse(report.images.single.url);
++    final apiUri = Uri.parse(ApiConfig.normalizedBaseUrl);
++    expect(imageUri.host, apiUri.host);
++    expect(imageUri.port, apiUri.port);
++    expect(imageUri.path, '/storage/complaint-reports/34/image.jpg');
++  });
++
++  test('server URL resolver accepts markdown-wrapped image URLs', () {
++    final url = ApiConfig.resolveServerUrl(
++      '[http://localhost/storage/image.jpg]'
++      '(http://localhost/storage/image.jpg)',
++    );
++    final resolved = Uri.parse(url);
++    final api = Uri.parse(ApiConfig.normalizedBaseUrl);
++
++    expect(resolved.host, api.host);
++    expect(resolved.port, api.port);
++    expect(resolved.path, '/storage/image.jpg');
++  });
++
+   test('draft status is fallback when can_edit is absent', () {
+     final report = ComplaintReport.fromJson(
+       <String, dynamic>{
+diff --git a/test/features/complaints/complaints_screen_test.dart b/test/features/complaints/complaints_screen_test.dart
+index b037352..90fd344 100644
+--- a/test/features/complaints/complaints_screen_test.dart
++++ b/test/features/complaints/complaints_screen_test.dart
+@@ -171,6 +171,65 @@ void main() {
+       findsOneWidget,
+     );
+   });
++
++  testWidgets('opens complaint details and displays its attached images', (
++    WidgetTester tester,
++  ) async {
++    final repository = _ComplaintsHistoryRepositoryFake();
++    const verifiedCitizen = AuthUser(
++      id: 9,
++      fullName: 'مواطن موثق',
++      email: 'verified@example.sy',
++      phoneNumber: '0990000000',
++      roles: <String>['citizen'],
++      accountType: 'citizen',
++      citizenProfile: <String, dynamic>{
++        'is_verified': true,
++        'municipality_id': 1,
++      },
++    );
++    await tester.binding.setSurfaceSize(const Size(800, 1200));
++    addTearDown(() => tester.binding.setSurfaceSize(null));
++
++    await tester.pumpWidget(
++      MaterialApp(
++        home: Scaffold(
++          body: ComplaintsScreen(
++            repository: repository,
++            authRepository: AuthRepositoryFake(
++              currentUser: verifiedCitizen,
++            ),
++            municipalityId: 1,
++          ),
++        ),
++      ),
++    );
++    await tester.pumpAndSettle();
++
++    await tester.tap(find.text('سجل الشكاوى'));
++    await tester.pumpAndSettle();
++    expect(
++      find.byKey(const ValueKey('open_complaint_34')),
++      findsOneWidget,
++    );
++
++    await tester.tap(find.byKey(const ValueKey('open_complaint_34')));
++    await tester.pumpAndSettle();
++
++    expect(repository.getReportCalls, 1);
++    expect(
++      find.byKey(const ValueKey('complaint_details_screen')),
++      findsOneWidget,
++    );
++    expect(find.text('تفاصيل الشكوى'), findsOneWidget);
++    expect(find.text('عمود إنارة متضرر'), findsWidgets);
++    expect(find.text('بلدية كفرسوسة'), findsOneWidget);
++    expect(find.text('scaled_125865.jpg'), findsOneWidget);
++    expect(
++      find.byKey(const ValueKey('complaint_image_5')),
++      findsOneWidget,
++    );
++  });
+ }
+ 
+ class _ComplaintsRepositoryFake implements ComplaintsRepository {
+@@ -295,3 +354,99 @@ class _ComplaintsRepositoryFake implements ComplaintsRepository {
+     mutations.add('delete-image:${report.id}:$imageId');
+   }
+ }
++
++class _ComplaintsHistoryRepositoryFake implements ComplaintsRepository {
++  int getReportCalls = 0;
++
++  static final ComplaintReport report = ComplaintReport(
++    id: 34,
++    status: const ComplaintStatus(
++      id: 2,
++      key: 'submitted',
++      label: 'تم الإرسال',
++      isTerminal: false,
++    ),
++    images: const <ComplaintImage>[
++      ComplaintImage(
++        id: 5,
++        url: 'https://example.invalid/complaint-image.jpg',
++        name: 'scaled_125865.jpg',
++        mimeType: 'image/jpeg',
++        fileSize: 149020,
++      ),
++    ],
++    municipalityId: 1,
++    municipalityName: 'بلدية كفرسوسة',
++    categoryId: 13,
++    category: const ComplaintCategory(
++      id: 13,
++      parentId: 11,
++      name: 'عمود إنارة متضرر',
++    ),
++    title: 'بلاغ عمود إنارة',
++    description: 'العمود متضرر ويحتاج إلى صيانة.',
++    textLocation: 'قرب الحديقة العامة',
++    latitude: 33.47287,
++    longitude: 36.249791,
++    serverCanEdit: false,
++    isLinked: false,
++    submittedAt: DateTime.utc(2026, 8, 14, 15, 45, 23),
++    createdAt: DateTime.utc(2026, 8, 14, 15, 45, 21),
++    updatedAt: DateTime.utc(2026, 8, 14, 15, 45, 23),
++  );
++
++  @override
++  Future<List<ComplaintCategory>> getCategories() async {
++    return const <ComplaintCategory>[];
++  }
++
++  @override
++  Future<List<ComplaintReport>> getReports() async {
++    return <ComplaintReport>[report];
++  }
++
++  @override
++  Future<ComplaintReport> getReport(int reportId) async {
++    getReportCalls++;
++    return report;
++  }
++
++  @override
++  Future<ComplaintReport> createDraft(ComplaintDraftInput input) {
++    throw UnsupportedError('Not used by this test.');
++  }
++
++  @override
++  Future<ComplaintReport> updateDraft({
++    required ComplaintReport report,
++    required ComplaintDraftInput input,
++  }) {
++    throw UnsupportedError('Not used by this test.');
++  }
++
++  @override
++  Future<void> uploadImages({
++    required ComplaintReport report,
++    required List<ComplaintAttachment> images,
++  }) {
++    throw UnsupportedError('Not used by this test.');
++  }
++
++  @override
++  Future<void> deleteImage({
++    required ComplaintReport report,
++    required int imageId,
++  }) {
++    throw UnsupportedError('Not used by this test.');
++  }
++
++  @override
++  Future<void> deleteDraft(ComplaintReport report) {
++    throw UnsupportedError('Not used by this test.');
++  }
++
++  @override
++  Future<ComplaintReport> submitDraft(ComplaintReport report) {
++    throw UnsupportedError('Not used by this test.');
++  }
++}
+

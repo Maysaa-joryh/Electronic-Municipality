@@ -95,6 +95,38 @@ void main() {
     expect(report.canEdit, isFalse);
   });
 
+  test('report model matches detail response image and coordinate fields', () {
+    final report = ComplaintReport.fromJson(
+      <String, dynamic>{
+        'id': 31,
+        'title': 'حاوية ممتلئة',
+        'latitude': '33.4730210',
+        'longitude': '36.2496910',
+        'status': <String, dynamic>{
+          'id': 1,
+          'key': 'draft',
+          'name': 'مسودة',
+        },
+        'images': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 1,
+            'original_name': 'evidence.jpg',
+            'view_url': 'http://server/storage/evidence.jpg',
+          },
+        ],
+      },
+    );
+
+    expect(report.latitude, 33.473021);
+    expect(report.longitude, 36.249691);
+    expect(report.status.label, 'مسودة');
+    expect(report.images.single.name, 'evidence.jpg');
+    expect(
+      report.images.single.url,
+      'http://server/storage/evidence.jpg',
+    );
+  });
+
   test('draft status is fallback when can_edit is absent', () {
     final report = ComplaintReport.fromJson(
       <String, dynamic>{
@@ -163,6 +195,37 @@ void main() {
 
     expect(error.message, 'حقل تصنيف الشكوى مطلوب.');
     expect(error.errorFor('category_id'), 'حقل تصنيف الشكوى مطلوب.');
+  });
+
+  test('maps unverified citizen rule without treating before as a date', () {
+    final requestOptions = RequestOptions(
+      path: 'citizen/complaints/32/submit',
+    );
+    final dioError = DioException(
+      requestOptions: requestOptions,
+      response: Response<Map<String, dynamic>>(
+        requestOptions: requestOptions,
+        statusCode: 422,
+        data: <String, dynamic>{
+          'message':
+              'The citizen account must be verified before submitting a complaint.',
+          'errors': <String, dynamic>{
+            'citizen': <String>[
+              'The citizen account must be verified before submitting a complaint.',
+            ],
+          },
+        },
+      ),
+      type: DioExceptionType.badResponse,
+    );
+
+    final error = ApiException.fromDioException(dioError);
+
+    expect(
+      error.message,
+      'حساب المواطن غير موثق. يجب توثيق الحساب قبل إرسال الشكوى.',
+    );
+    expect(error.requiresCitizenVerification, isTrue);
   });
 
   test('complaint endpoint paths preserve the draft workflow', () {

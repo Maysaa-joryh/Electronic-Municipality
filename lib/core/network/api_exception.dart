@@ -121,6 +121,8 @@ class ApiException implements Exception {
 
   bool get isUnauthorized => kind == ApiExceptionKind.unauthorized;
   bool get isValidation => kind == ApiExceptionKind.validation;
+  bool get requiresCitizenVerification =>
+      isValidation && errors.containsKey('citizen');
 
   String? errorFor(String field) {
     final fieldErrors = errors[field];
@@ -232,6 +234,16 @@ class ApiException implements Exception {
     ])) {
       return 'بيانات تسجيل الدخول غير صحيحة.';
     }
+    if (field == 'citizen' &&
+        _containsAny(normalized, const [
+          'must be verified',
+          'account must be verified',
+          'verified before submitting',
+          'توثيق الحساب',
+          'الحساب غير موثق',
+        ])) {
+      return 'حساب المواطن غير موثق. يجب توثيق الحساب قبل إرسال الشكوى.';
+    }
     if (_containsAny(normalized, const [
       'required',
       'مطلوب',
@@ -327,8 +339,6 @@ class ApiException implements Exception {
     }
     if (_containsAny(normalized, const [
       'date',
-      'before',
-      'after',
       'تاريخ',
     ])) {
       return 'قيمة $label ليست تاريخًا صالحًا.';
@@ -374,6 +384,7 @@ class ApiException implements Exception {
       'front_id_photo': 'صورة الوجه الأمامي للهوية',
       'back_id_photo': 'صورة الوجه الخلفي للهوية',
       'identity': 'الهوية',
+      'citizen': 'حساب المواطن',
     };
 
     if (field.startsWith('images.')) return labels['images']!;

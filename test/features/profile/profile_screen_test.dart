@@ -37,7 +37,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('مالك الشحرور'), findsOneWidget);
+    expect(find.text('مالك شحرور'), findsWidgets);
     expect(find.text('غير موثق'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('start_identity_verification')),

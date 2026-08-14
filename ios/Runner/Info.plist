@@ -45,6 +45,8 @@
 	<string>نحتاج إلى استخدام الكاميرا لالتقاط صور الهوية وتوثيق الحساب.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>نحتاج إلى الوصول للصور لاختيار صور الهوية وتوثيق الحساب.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>نحتاج إلى موقعك أثناء استخدام التطبيق لتحديد مكان الشكوى بدقة.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

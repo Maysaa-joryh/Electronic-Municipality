@@ -223,6 +223,7 @@ class ApiException implements Exception {
     final normalized = rawMessages.join(' ').toLowerCase();
     final isIdentityPhoto =
         field == 'front_id_photo' || field == 'back_id_photo';
+    final isComplaintImage = field == 'images' || field.startsWith('images.');
 
     if (_containsAny(normalized, const [
       'credentials',
@@ -282,6 +283,34 @@ class ApiException implements Exception {
         ])) {
       return 'الملف المحدد ليس صورة هوية صالحة.';
     }
+    if (isComplaintImage &&
+        _containsAny(normalized, const [
+          'max',
+          'must not exceed',
+          '5mb',
+          '5120',
+          'الحجم',
+        ])) {
+      return 'يجب ألا يتجاوز حجم كل صورة شكوى 5 ميغابايت.';
+    }
+    if (isComplaintImage &&
+        _containsAny(normalized, const [
+          'mimes',
+          'jpg',
+          'jpeg',
+          'png',
+          'type',
+          'صيغة',
+        ])) {
+      return 'يجب أن تكون صور الشكوى بصيغة JPG أو PNG.';
+    }
+    if (isComplaintImage &&
+        _containsAny(normalized, const [
+          'image',
+          'صورة',
+        ])) {
+      return 'أحد الملفات المحددة ليس صورة شكوى صالحة.';
+    }
     if (_containsAny(normalized, const [
       'does not exist',
       'exists',
@@ -333,12 +362,21 @@ class ApiException implements Exception {
       'gender': 'الجنس',
       'governorate_id': 'المحافظة',
       'municipality_id': 'البلدية',
+      'category_id': 'تصنيف الشكوى',
+      'title': 'عنوان الشكوى',
+      'description': 'وصف الشكوى',
+      'text_location': 'وصف الموقع',
+      'latitude': 'خط العرض',
+      'longitude': 'خط الطول',
+      'images': 'صور الشكوى',
+      'images.*': 'صور الشكوى',
       'needs_special_care': 'حالة الرعاية الخاصة',
       'front_id_photo': 'صورة الوجه الأمامي للهوية',
       'back_id_photo': 'صورة الوجه الخلفي للهوية',
       'identity': 'الهوية',
     };
 
+    if (field.startsWith('images.')) return labels['images']!;
     return labels[field] ?? 'البيانات المدخلة';
   }
 

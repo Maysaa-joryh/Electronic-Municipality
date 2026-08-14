@@ -1,0 +1,17 @@
+diff --git a/test/features/complaints/complaint_location_picker_screen_test.dart b/test/features/complaints/complaint_location_picker_screen_test.dart
+index a19861a..f7e2d89 100644
+--- a/test/features/complaints/complaint_location_picker_screen_test.dart
++++ b/test/features/complaints/complaint_location_picker_screen_test.dart
+@@ -24,8 +24,10 @@ void main() {
+                     MaterialPageRoute<ComplaintLocation>(
+                       builder: (_) => ComplaintLocationPickerScreen(
+                         locationService: service,
+-                        mapOverride: const ColoredBox(
+-                          color: Color(0xFFE6ECE9),
++                        mapOverride: const SizedBox.expand(
++                          child: ColoredBox(
++                            color: Color(0xFFE6ECE9),
++                          ),
+                         ),
+                       ),
+                     ),

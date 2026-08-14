@@ -1,0 +1,300 @@
+diff --git a/lib/features/complaints/data/complaint_endpoints.dart b/lib/features/complaints/data/complaint_endpoints.dart
+index 6a70b46..5f45796 100644
+--- a/lib/features/complaints/data/complaint_endpoints.dart
++++ b/lib/features/complaints/data/complaint_endpoints.dart
+@@ -1,5 +1,5 @@
+ abstract final class ComplaintEndpoints {
+-  static const String categories = 'public/complaint-categories';
++  static const String categories = 'ComplaintCategories';
+   static const String reports = 'citizen/complaints';
+   static const String drafts = 'citizen/complaints/drafts';
+ 
+diff --git a/lib/features/complaints/data/complaints_remote_data_source.dart b/lib/features/complaints/data/complaints_remote_data_source.dart
+index 82dd104..b794aaa 100644
+--- a/lib/features/complaints/data/complaints_remote_data_source.dart
++++ b/lib/features/complaints/data/complaints_remote_data_source.dart
+@@ -11,10 +11,7 @@ class ComplaintsRemoteDataSource {
+   final ApiClient _client;
+ 
+   Future<List<ComplaintCategory>> getCategories() async {
+-    final envelope = await _client.get(
+-      ComplaintEndpoints.categories,
+-      requiresAuth: false,
+-    );
++    final envelope = await _client.get(ComplaintEndpoints.categories);
+ 
+     try {
+       return _requiredListData(envelope)
+diff --git a/lib/features/complaints/data/models/complaint_models.dart b/lib/features/complaints/data/models/complaint_models.dart
+index 18aeefd..793816b 100644
+--- a/lib/features/complaints/data/models/complaint_models.dart
++++ b/lib/features/complaints/data/models/complaint_models.dart
+@@ -6,20 +6,30 @@ class ComplaintCategory {
+   const ComplaintCategory({
+     required this.id,
+     required this.name,
++    this.parentId,
+     this.key,
++    this.children = const <ComplaintCategory>[],
+   });
+ 
+   factory ComplaintCategory.fromJson(Map<String, dynamic> json) {
+     return ComplaintCategory(
+       id: _requiredInt(json, 'id'),
+-      key: _requiredString(json, 'key'),
+       name: _requiredString(json, 'name'),
++      parentId: _nullableInt(json['parent_id']),
++      key: _nullableString(json['key']),
++      children: _mapList(json['children'])
++          .map(ComplaintCategory.fromJson)
++          .toList(growable: false),
+     );
+   }
+ 
+   final int id;
++  final int? parentId;
+   final String? key;
+   final String name;
++  final List<ComplaintCategory> children;
++
++  bool get isGroup => parentId == null && children.isNotEmpty;
+ }
+ 
+ class ComplaintStatus {
+diff --git a/lib/features/complaints/presentation/screens/complaints_screen.dart b/lib/features/complaints/presentation/screens/complaints_screen.dart
+index cf6a38c..cf15cc9 100644
+--- a/lib/features/complaints/presentation/screens/complaints_screen.dart
++++ b/lib/features/complaints/presentation/screens/complaints_screen.dart
+@@ -47,6 +47,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+   List<ComplaintReport> _reports = const [];
+   List<ComplaintAttachment> _pendingImages = const [];
+   ComplaintReport? _draft;
++  int? _categoryGroupId;
+   int? _categoryId;
+   int _mode = 0;
+   bool _loading = true;
+@@ -87,6 +88,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+       setState(() {
+         _categories = categories;
+         _reports = reports;
++        _categoryGroupId = _groupIdForCategory(categories, _categoryId);
+       });
+     } catch (error, stackTrace) {
+       debugPrint('LOAD COMPLAINTS ERROR: $error');
+@@ -254,6 +256,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+         return;
+       }
+       _categoryId = report.categoryId;
++      _categoryGroupId = _groupIdForCategory(_categories, report.categoryId);
+       _title.text = report.title ?? '';
+       _description.text = report.description ?? '';
+       _textLocation.text = report.textLocation ?? '';
+@@ -317,6 +320,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+ 
+   void _clearEditor() {
+     _draft = null;
++    _categoryGroupId = null;
+     _categoryId = null;
+     _title.clear();
+     _description.clear();
+@@ -328,6 +332,43 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+     _formError = null;
+   }
+ 
++  static int? _groupIdForCategory(
++    List<ComplaintCategory> groups,
++    int? categoryId,
++  ) {
++    if (categoryId == null) return null;
++    for (final group in groups) {
++      if (group.children.any((item) => item.id == categoryId)) {
++        return group.id;
++      }
++    }
++    return null;
++  }
++
++  List<ComplaintCategory> get _selectedCategoryTypes {
++    for (final group in _categories) {
++      if (group.id == _categoryGroupId) return group.children;
++    }
++    return const <ComplaintCategory>[];
++  }
++
++  void _selectCategoryGroup(int? value) {
++    setState(() {
++      _categoryGroupId = value;
++      _categoryId = null;
++    });
++  }
++
++  void _selectCategory(int? value) {
++    final errors = Map<String, List<String>>.of(_fieldErrors)
++      ..remove('category_id');
++    setState(() {
++      _categoryId = value;
++      _fieldErrors = Map.unmodifiable(errors);
++      _formError = null;
++    });
++  }
++
+   String? _errorFor(String field) {
+     final values = _fieldErrors[field];
+     return values == null || values.isEmpty ? null : values.first;
+@@ -426,20 +467,48 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+           _Notice(message: _formError!),
+           const SizedBox(height: 12),
+         ],
++        DropdownButtonFormField<int>(
++          key: const ValueKey('complaint_category_group_field'),
++          value: _categories.any((item) => item.id == _categoryGroupId)
++              ? _categoryGroupId
++              : null,
++          isExpanded: true,
++          decoration: _decoration(
++            'مجال الشكوى',
++            'اختر المجال الرئيسي',
++            null,
++          ),
++          items: _categories
++              .map((item) =>
++                  DropdownMenuItem(value: item.id, child: Text(item.name)))
++              .toList(),
++          onChanged: canEdit && !_busy && !_loading
++              ? _selectCategoryGroup
++              : null,
++        ),
++        const SizedBox(height: 12),
+         DropdownButtonFormField<int>(
+           key: const ValueKey('complaint_category_field'),
+-          value: _categories.any((item) => item.id == _categoryId)
++          value: _selectedCategoryTypes.any((item) => item.id == _categoryId)
+               ? _categoryId
+               : null,
+           isExpanded: true,
+           decoration: _decoration(
+-              'تصنيف الشكوى', 'اختر التصنيف', _errorFor('category_id')),
+-          items: _categories
++            'نوع الشكوى',
++            _categoryGroupId == null
++                ? 'اختر المجال أولًا'
++                : 'اختر نوع المشكلة',
++            _errorFor('category_id'),
++          ),
++          items: _selectedCategoryTypes
+               .map((item) =>
+                   DropdownMenuItem(value: item.id, child: Text(item.name)))
+               .toList(),
+-          onChanged: canEdit && !_busy
+-              ? (value) => setState(() => _categoryId = value)
++          onChanged: canEdit &&
++                  !_busy &&
++                  !_loading &&
++                  _categoryGroupId != null
++              ? _selectCategory
+               : null,
+         ),
+         const SizedBox(height: 12),
+diff --git a/test/features/complaints/complaint_contract_test.dart b/test/features/complaints/complaint_contract_test.dart
+index c33f6bf..0985566 100644
+--- a/test/features/complaints/complaint_contract_test.dart
++++ b/test/features/complaints/complaint_contract_test.dart
+@@ -8,19 +8,32 @@ import 'package:electronic_municipality/features/complaints/data/complaint_endpo
+ import 'package:electronic_municipality/features/complaints/data/models/complaint_models.dart';
+ 
+ void main() {
+-  test('category model matches the agreed public endpoint response', () {
++  test('category model matches the authenticated hierarchical response', () {
+     final category = ComplaintCategory.fromJson(
+       <String, dynamic>{
+         'id': 1,
+-        'key': 'electricity',
+-        'name': 'كهرباء',
++        'parent_id': null,
++        'name': 'الطرق والأرصفة',
++        'children': <Map<String, dynamic>>[
++          <String, dynamic>{
++            'id': 2,
++            'parent_id': 1,
++            'name': 'حفرة في الطريق',
++          },
++        ],
+       },
+     );
+ 
+     expect(category.id, 1);
+-    expect(category.key, 'electricity');
+-    expect(category.name, 'كهرباء');
+-    expect(ComplaintEndpoints.categories, 'public/complaint-categories');
++    expect(category.parentId, isNull);
++    expect(category.key, isNull);
++    expect(category.name, 'الطرق والأرصفة');
++    expect(category.isGroup, isTrue);
++    expect(category.children, hasLength(1));
++    expect(category.children.single.id, 2);
++    expect(category.children.single.parentId, 1);
++    expect(category.children.single.name, 'حفرة في الطريق');
++    expect(ComplaintEndpoints.categories, 'ComplaintCategories');
+   });
+ 
+   test('draft request uses exactly the Laravel complaint field names', () {
+diff --git a/test/features/complaints/complaints_screen_test.dart b/test/features/complaints/complaints_screen_test.dart
+index 36283f7..7052990 100644
+--- a/test/features/complaints/complaints_screen_test.dart
++++ b/test/features/complaints/complaints_screen_test.dart
+@@ -38,9 +38,16 @@ void main() {
+     );
+     await tester.pumpAndSettle();
+ 
++    await tester.tap(
++      find.byKey(const ValueKey('complaint_category_group_field')),
++    );
++    await tester.pumpAndSettle();
++    await tester.tap(find.text('المياه والصرف الصحي').last);
++    await tester.pumpAndSettle();
++
+     await tester.tap(find.byKey(const ValueKey('complaint_category_field')));
+     await tester.pumpAndSettle();
+-    await tester.tap(find.text('مياه').last);
++    await tester.tap(find.text('تسرب مياه').last);
+     await tester.pumpAndSettle();
+ 
+     await tester.enterText(
+@@ -87,7 +94,7 @@ void main() {
+     expect(
+       repository.mutations,
+       <String>[
+-        'create:12:2',
++        'create:12:16',
+         'upload:51:1',
+         'submit:51',
+       ],
+@@ -111,10 +118,16 @@ class _ComplaintsRepositoryFake implements ComplaintsRepository {
+   ComplaintDraftInput? createdInput;
+   ComplaintReport? _report;
+ 
++  static const _waterLeak = ComplaintCategory(
++    id: 16,
++    parentId: 15,
++    name: 'تسرب مياه',
++  );
++
+   static const _water = ComplaintCategory(
+-    id: 2,
+-    key: 'water',
+-    name: 'مياه',
++    id: 15,
++    name: 'المياه والصرف الصحي',
++    children: <ComplaintCategory>[_waterLeak],
+   );
+ 
+   @override
+@@ -144,7 +157,7 @@ class _ComplaintsRepositoryFake implements ComplaintsRepository {
+       images: const <ComplaintImage>[],
+       municipalityId: input.municipalityId,
+       categoryId: input.categoryId,
+-      category: _water,
++      category: _waterLeak,
+       title: input.title?.trim(),
+       description: input.description?.trim(),
+       textLocation: input.textLocation?.trim(),

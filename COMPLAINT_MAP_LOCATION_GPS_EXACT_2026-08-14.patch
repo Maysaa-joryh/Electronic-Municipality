@@ -1,0 +1,900 @@
+diff --git a/pubspec.yaml b/pubspec.yaml
+index 568c889..d02ce40 100644
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -36,8 +36,11 @@ dependencies:
+   # Use with the CupertinoIcons class for iOS style icons.
+   cupertino_icons: ^1.0.2
+   dio: ^5.11.0
++  flutter_map: ^6.1.0
+   flutter_secure_storage: ^9.2.4
++  geolocator: ^10.1.1
+   image_picker: ^1.0.7
++  latlong2: ^0.9.0
+ 
+ dev_dependencies:
+   flutter_test:
+diff --git a/android/app/src/main/AndroidManifest.xml b/android/app/src/main/AndroidManifest.xml
+index 0cf2d16..5497805 100644
+--- a/android/app/src/main/AndroidManifest.xml
++++ b/android/app/src/main/AndroidManifest.xml
+@@ -1,5 +1,7 @@
+ <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+     <uses-permission android:name="android.permission.INTERNET"/>
++    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
++    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+ 
+     <application
+         android:label="electronic_municipality"
+diff --git a/ios/Runner/Info.plist b/ios/Runner/Info.plist
+index a11c282..4119afc 100644
+--- a/ios/Runner/Info.plist
++++ b/ios/Runner/Info.plist
+@@ -45,6 +45,8 @@
+ 	<string>نحتاج إلى استخدام الكاميرا لالتقاط صور الهوية وتوثيق الحساب.</string>
+ 	<key>NSPhotoLibraryUsageDescription</key>
+ 	<string>نحتاج إلى الوصول للصور لاختيار صور الهوية وتوثيق الحساب.</string>
++	<key>NSLocationWhenInUseUsageDescription</key>
++	<string>نحتاج إلى موقعك أثناء استخدام التطبيق لتحديد مكان الشكوى بدقة.</string>
+ 	<key>CADisableMinimumFrameDurationOnPhone</key>
+ 	<true/>
+ 	<key>UIApplicationSupportsIndirectInputEvents</key>
+diff --git a/lib/features/complaints/presentation/screens/complaints_screen.dart b/lib/features/complaints/presentation/screens/complaints_screen.dart
+index 697fae2..cf6a38c 100644
+--- a/lib/features/complaints/presentation/screens/complaints_screen.dart
++++ b/lib/features/complaints/presentation/screens/complaints_screen.dart
+@@ -7,8 +7,13 @@ import '../../../../core/network/api_exception.dart';
+ import '../../../../shared/widgets/municipality_widgets.dart';
+ import '../../data/models/complaint_models.dart';
+ import '../../domain/complaints_repository.dart';
++import 'complaint_location_picker_screen.dart';
+ 
+ typedef ComplaintImagePicker = Future<List<ComplaintAttachment>> Function();
++typedef ComplaintLocationSelector = Future<ComplaintLocation?> Function(
++  BuildContext context,
++  ComplaintLocation? initialLocation,
++);
+ 
+ class ComplaintsScreen extends StatefulWidget {
+   const ComplaintsScreen({
+@@ -16,11 +21,13 @@ class ComplaintsScreen extends StatefulWidget {
+     this.repository,
+     this.municipalityId,
+     this.imagePicker,
++    this.locationSelector,
+   });
+ 
+   final ComplaintsRepository? repository;
+   final int? municipalityId;
+   final ComplaintImagePicker? imagePicker;
++  final ComplaintLocationSelector? locationSelector;
+ 
+   @override
+   State<ComplaintsScreen> createState() => _ComplaintsScreenState();
+@@ -208,6 +215,35 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+     return result;
+   }
+ 
++  Future<void> _pickLocation() async {
++    final latitude = _coordinate(_latitude.text);
++    final longitude = _coordinate(_longitude.text);
++    final initial = latitude == null || longitude == null
++        ? null
++        : ComplaintLocation(latitude: latitude, longitude: longitude);
++
++    final selected = widget.locationSelector == null
++        ? await Navigator.of(context).push<ComplaintLocation>(
++            MaterialPageRoute<ComplaintLocation>(
++              builder: (_) => ComplaintLocationPickerScreen(
++                initialLocation: initial,
++              ),
++            ),
++          )
++        : await widget.locationSelector!(context, initial);
++    if (selected == null || !mounted) return;
++
++    final errors = Map<String, List<String>>.of(_fieldErrors)
++      ..remove('latitude')
++      ..remove('longitude');
++    setState(() {
++      _latitude.text = selected.latitude.toStringAsFixed(6);
++      _longitude.text = selected.longitude.toStringAsFixed(6);
++      _fieldErrors = Map.unmodifiable(errors);
++      _formError = null;
++    });
++  }
++
+   Future<void> _edit(ComplaintReport summary) async {
+     setState(() => _busy = true);
+     try {
+@@ -432,27 +468,14 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+             error: _errorFor('text_location'),
+             enabled: canEdit && !_busy),
+         const SizedBox(height: 12),
+-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+-          Expanded(
+-              child: _Field(
+-                  key: const ValueKey('complaint_latitude_field'),
+-                  controller: _latitude,
+-                  label: 'خط العرض',
+-                  hint: '33.5138',
+-                  error: _errorFor('latitude'),
+-                  enabled: canEdit && !_busy,
+-                  numeric: true)),
+-          const SizedBox(width: 10),
+-          Expanded(
+-              child: _Field(
+-                  key: const ValueKey('complaint_longitude_field'),
+-                  controller: _longitude,
+-                  label: 'خط الطول',
+-                  hint: '36.2765',
+-                  error: _errorFor('longitude'),
+-                  enabled: canEdit && !_busy,
+-                  numeric: true)),
+-        ]),
++        _LocationField(
++          latitude: _coordinate(_latitude.text),
++          longitude: _coordinate(_longitude.text),
++          latitudeError: _errorFor('latitude'),
++          longitudeError: _errorFor('longitude'),
++          enabled: canEdit && !_busy,
++          onSelect: _pickLocation,
++        ),
+         const SizedBox(height: 18),
+         Row(children: [
+           const Expanded(
+@@ -629,6 +652,121 @@ class _ComplaintTile extends StatelessWidget {
+   }
+ }
+ 
++class _LocationField extends StatelessWidget {
++  const _LocationField({
++    required this.latitude,
++    required this.longitude,
++    required this.latitudeError,
++    required this.longitudeError,
++    required this.enabled,
++    required this.onSelect,
++  });
++
++  final double? latitude;
++  final double? longitude;
++  final String? latitudeError;
++  final String? longitudeError;
++  final bool enabled;
++  final VoidCallback onSelect;
++
++  @override
++  Widget build(BuildContext context) {
++    final hasLocation = latitude != null && longitude != null;
++    final error = latitudeError ?? longitudeError;
++
++    return Container(
++      padding: const EdgeInsets.all(14),
++      decoration: BoxDecoration(
++        color: AppColors.surfaceMuted,
++        borderRadius: BorderRadius.circular(10),
++        border: Border.all(
++          color: error == null ? AppColors.border : AppColors.danger,
++        ),
++      ),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.stretch,
++        children: [
++          Row(
++            children: [
++              Container(
++                width: 42,
++                height: 42,
++                decoration: const BoxDecoration(
++                  color: Color(0xFFE1EEE8),
++                  shape: BoxShape.circle,
++                ),
++                child: const Icon(
++                  Icons.map_outlined,
++                  color: AppColors.primary,
++                ),
++              ),
++              const SizedBox(width: 11),
++              Expanded(
++                child: Column(
++                  crossAxisAlignment: CrossAxisAlignment.start,
++                  children: [
++                    const Text(
++                      'موقع الشكوى على الخريطة',
++                      style: TextStyle(fontWeight: FontWeight.w800),
++                    ),
++                    const SizedBox(height: 3),
++                    Text(
++                      hasLocation
++                          ? 'تم تحديد الموقع بنجاح'
++                          : 'اضغط لاختيار الموقع الدقيق',
++                      style: TextStyle(
++                        color: hasLocation
++                            ? AppColors.success
++                            : AppColors.muted,
++                        fontSize: 12.5,
++                      ),
++                    ),
++                  ],
++                ),
++              ),
++            ],
++          ),
++          if (hasLocation) ...[
++            const SizedBox(height: 10),
++            Container(
++              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
++              decoration: BoxDecoration(
++                color: Colors.white,
++                borderRadius: BorderRadius.circular(8),
++              ),
++              child: Text(
++                '${latitude!.toStringAsFixed(6)}, ${longitude!.toStringAsFixed(6)}',
++                key: const ValueKey('complaint_selected_coordinates'),
++                textDirection: TextDirection.ltr,
++                textAlign: TextAlign.center,
++                style: const TextStyle(fontWeight: FontWeight.w700),
++              ),
++            ),
++          ],
++          if (error != null) ...[
++            const SizedBox(height: 7),
++            Text(
++              error,
++              style: const TextStyle(color: AppColors.danger, fontSize: 12),
++            ),
++          ],
++          const SizedBox(height: 10),
++          OutlinedButton.icon(
++            key: const ValueKey('select_complaint_location'),
++            onPressed: enabled ? onSelect : null,
++            icon: Icon(
++              hasLocation
++                  ? Icons.edit_location_alt_outlined
++                  : Icons.add_location_alt_outlined,
++            ),
++            label: Text(hasLocation ? 'تغيير الموقع' : 'اختيار من الخريطة'),
++          ),
++        ],
++      ),
++    );
++  }
++}
++
+ class _Field extends StatelessWidget {
+   const _Field(
+       {super.key,
+@@ -637,15 +775,13 @@ class _Field extends StatelessWidget {
+       required this.hint,
+       required this.enabled,
+       this.error,
+-      this.lines = 1,
+-      this.numeric = false});
++      this.lines = 1});
+   final TextEditingController controller;
+   final String label;
+   final String hint;
+   final String? error;
+   final bool enabled;
+   final int lines;
+-  final bool numeric;
+ 
+   @override
+   Widget build(BuildContext context) => TextField(
+@@ -653,10 +789,7 @@ class _Field extends StatelessWidget {
+         enabled: enabled,
+         maxLines: lines,
+         minLines: lines,
+-        textDirection: numeric ? TextDirection.ltr : TextDirection.rtl,
+-        keyboardType: numeric
+-            ? const TextInputType.numberWithOptions(decimal: true, signed: true)
+-            : null,
++        textDirection: TextDirection.rtl,
+         decoration: _decoration(label, hint, error),
+       );
+ }
+diff --git a/lib/features/complaints/presentation/models/complaint_location.dart b/lib/features/complaints/presentation/models/complaint_location.dart
+new file mode 100644
+index 0000000..bc72f9f
+--- /dev/null
++++ b/lib/features/complaints/presentation/models/complaint_location.dart
+@@ -0,0 +1,9 @@
++class ComplaintLocation {
++  const ComplaintLocation({
++    required this.latitude,
++    required this.longitude,
++  });
++
++  final double latitude;
++  final double longitude;
++}
+diff --git a/lib/features/complaints/presentation/screens/complaint_location_picker_screen.dart b/lib/features/complaints/presentation/screens/complaint_location_picker_screen.dart
+new file mode 100644
+index 0000000..a4c31f2
+--- /dev/null
++++ b/lib/features/complaints/presentation/screens/complaint_location_picker_screen.dart
+@@ -0,0 +1,307 @@
++import 'package:flutter/material.dart';
++import 'package:flutter_map/flutter_map.dart';
++import 'package:latlong2/latlong.dart';
++
++import '../../../../app/theme/app_colors.dart';
++import '../models/complaint_location.dart';
++import '../services/complaint_location_service.dart';
++
++export '../models/complaint_location.dart';
++
++class ComplaintLocationPickerScreen extends StatefulWidget {
++  const ComplaintLocationPickerScreen({
++    super.key,
++    this.initialLocation,
++    this.locationService = const GeolocatorComplaintLocationService(),
++    @visibleForTesting this.mapOverride,
++  });
++
++  final ComplaintLocation? initialLocation;
++  final ComplaintLocationService locationService;
++  final Widget? mapOverride;
++
++  @override
++  State<ComplaintLocationPickerScreen> createState() =>
++      _ComplaintLocationPickerScreenState();
++}
++
++class _ComplaintLocationPickerScreenState
++    extends State<ComplaintLocationPickerScreen> {
++  static const LatLng _defaultCenter = LatLng(34.8021, 38.9968);
++
++  final MapController _mapController = MapController();
++  LatLng? _selectedPoint;
++  ComplaintLocationFailure? _locationFailure;
++  bool _locating = false;
++  bool _mapReady = false;
++
++  @override
++  void initState() {
++    super.initState();
++    final initial = widget.initialLocation;
++    if (initial != null) {
++      _selectedPoint = LatLng(initial.latitude, initial.longitude);
++    }
++  }
++
++  @override
++  void dispose() {
++    _mapController.dispose();
++    super.dispose();
++  }
++
++  void _selectPoint(LatLng point) {
++    setState(() {
++      _selectedPoint = point;
++      _locationFailure = null;
++    });
++  }
++
++  Future<void> _useCurrentLocation() async {
++    if (_locating) return;
++    setState(() {
++      _locating = true;
++      _locationFailure = null;
++    });
++    try {
++      final location = await widget.locationService.getCurrentLocation();
++      if (!mounted) return;
++      final point = LatLng(location.latitude, location.longitude);
++      setState(() => _selectedPoint = point);
++      if (_mapReady) {
++        _mapController.move(point, 16);
++      }
++    } on ComplaintLocationFailure catch (failure) {
++      if (mounted) setState(() => _locationFailure = failure);
++    } catch (_) {
++      if (mounted) {
++        setState(
++          () => _locationFailure = const ComplaintLocationFailure(
++            ComplaintLocationFailureKind.unavailable,
++            'تعذر تحديد موقعك الآن. حاول مجددًا أو اختر الموقع يدويًا.',
++          ),
++        );
++      }
++    } finally {
++      if (mounted) setState(() => _locating = false);
++    }
++  }
++
++  Future<void> _openLocationSettings() async {
++    final failure = _locationFailure;
++    if (failure == null || !failure.canOpenSettings) return;
++    await widget.locationService.openSettings(failure.kind);
++  }
++
++  @override
++  Widget build(BuildContext context) {
++    final initialCenter = _selectedPoint ?? _defaultCenter;
++
++    return Scaffold(
++      backgroundColor: AppColors.background,
++      appBar: AppBar(
++        backgroundColor: AppColors.background,
++        foregroundColor: AppColors.text,
++        elevation: 0,
++        title: const Text(
++          'اختيار موقع الشكوى',
++          style: TextStyle(fontWeight: FontWeight.w800),
++        ),
++      ),
++      body: Stack(
++        children: [
++          widget.mapOverride ??
++              FlutterMap(
++                mapController: _mapController,
++                options: MapOptions(
++                  initialCenter: initialCenter,
++                  initialZoom: _selectedPoint == null ? 6.5 : 15,
++                  minZoom: 5,
++                  maxZoom: 19,
++                  onMapReady: () => _mapReady = true,
++                  onTap: (_, point) => _selectPoint(point),
++                ),
++                children: [
++                  TileLayer(
++                    urlTemplate:
++                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
++                    userAgentPackageName:
++                        'com.example.electronic_municipality',
++                    maxZoom: 19,
++                  ),
++                  if (_selectedPoint != null)
++                    MarkerLayer(
++                      markers: [
++                        Marker(
++                          point: _selectedPoint!,
++                          width: 54,
++                          height: 54,
++                          child: const Icon(
++                            Icons.location_pin,
++                            size: 52,
++                            color: AppColors.danger,
++                            shadows: [
++                              Shadow(color: Colors.black26, blurRadius: 8),
++                            ],
++                          ),
++                        ),
++                      ],
++                    ),
++                ],
++              ),
++          Positioned(
++            top: 12,
++            left: 16,
++            right: 16,
++            child: IgnorePointer(
++              child: Container(
++                padding: const EdgeInsets.symmetric(
++                  horizontal: 14,
++                  vertical: 11,
++                ),
++                decoration: BoxDecoration(
++                  color: Colors.white.withOpacity(.94),
++                  borderRadius: BorderRadius.circular(12),
++                  boxShadow: const [
++                    BoxShadow(
++                      color: Colors.black12,
++                      blurRadius: 12,
++                      offset: Offset(0, 4),
++                    ),
++                  ],
++                ),
++                child: const Row(
++                  children: [
++                    Icon(Icons.touch_app_outlined, color: AppColors.primary),
++                    SizedBox(width: 9),
++                    Expanded(
++                      child: Text(
++                        'حرّك الخريطة واضغط على الموقع الدقيق للشكوى.',
++                        style: TextStyle(fontWeight: FontWeight.w700),
++                      ),
++                    ),
++                  ],
++                ),
++              ),
++            ),
++          ),
++          const Positioned(
++            left: 8,
++            bottom: 245,
++            child: DecoratedBox(
++              decoration: BoxDecoration(
++                color: Color(0xEFFFFFFF),
++                borderRadius: BorderRadius.all(Radius.circular(5)),
++              ),
++              child: Padding(
++                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
++                child: Text(
++                  '© OpenStreetMap contributors',
++                  style: TextStyle(fontSize: 10, color: AppColors.muted),
++                ),
++              ),
++            ),
++          ),
++          Positioned(
++            left: 16,
++            right: 16,
++            bottom: 16,
++            child: SafeArea(
++              top: false,
++              child: Container(
++                padding: const EdgeInsets.all(14),
++                decoration: BoxDecoration(
++                  color: Colors.white,
++                  borderRadius: BorderRadius.circular(14),
++                  boxShadow: const [
++                    BoxShadow(
++                      color: Colors.black26,
++                      blurRadius: 20,
++                      offset: Offset(0, 7),
++                    ),
++                  ],
++                ),
++                child: Column(
++                  mainAxisSize: MainAxisSize.min,
++                  crossAxisAlignment: CrossAxisAlignment.stretch,
++                  children: [
++                    if (_selectedPoint == null)
++                      const Text(
++                        'لم يتم تحديد موقع بعد.',
++                        textAlign: TextAlign.center,
++                        style: TextStyle(color: AppColors.muted),
++                      )
++                    else
++                      Text(
++                        'خط العرض: ${_selectedPoint!.latitude.toStringAsFixed(6)}\n'
++                        'خط الطول: ${_selectedPoint!.longitude.toStringAsFixed(6)}',
++                        textDirection: TextDirection.ltr,
++                        textAlign: TextAlign.center,
++                        style: const TextStyle(
++                          fontWeight: FontWeight.w700,
++                          height: 1.45,
++                        ),
++                      ),
++                    if (_locationFailure != null) ...[
++                      const SizedBox(height: 9),
++                      Text(
++                        _locationFailure!.message,
++                        textAlign: TextAlign.center,
++                        style: const TextStyle(
++                          color: AppColors.danger,
++                          fontSize: 12.5,
++                          fontWeight: FontWeight.w600,
++                        ),
++                      ),
++                      if (_locationFailure!.canOpenSettings)
++                        TextButton.icon(
++                          key: const ValueKey('open_location_settings'),
++                          onPressed: _openLocationSettings,
++                          icon: const Icon(Icons.settings_outlined, size: 19),
++                          label: Text(
++                            _locationFailure!.kind ==
++                                    ComplaintLocationFailureKind.serviceDisabled
++                                ? 'فتح إعدادات الموقع'
++                                : 'فتح إعدادات التطبيق',
++                          ),
++                        ),
++                    ],
++                    const SizedBox(height: 10),
++                    OutlinedButton.icon(
++                      key: const ValueKey('use_current_complaint_location'),
++                      onPressed: _locating ? null : _useCurrentLocation,
++                      icon: _locating
++                          ? const SizedBox.square(
++                              dimension: 18,
++                              child: CircularProgressIndicator(strokeWidth: 2),
++                            )
++                          : const Icon(Icons.my_location_rounded),
++                      label: Text(
++                        _locating ? 'جارٍ تحديد موقعك...' : 'تحديد موقعي الحالي',
++                      ),
++                    ),
++                    const SizedBox(height: 9),
++                    FilledButton.icon(
++                      key: const ValueKey('confirm_complaint_location'),
++                      onPressed: _selectedPoint == null
++                          ? null
++                          : () => Navigator.pop(
++                                context,
++                                ComplaintLocation(
++                                  latitude: _selectedPoint!.latitude,
++                                  longitude: _selectedPoint!.longitude,
++                                ),
++                              ),
++                      icon: const Icon(Icons.check_circle_outline),
++                      label: const Text('اعتماد هذا الموقع'),
++                    ),
++                  ],
++                ),
++              ),
++            ),
++          ),
++        ],
++      ),
++    );
++  }
++}
+diff --git a/lib/features/complaints/presentation/services/complaint_location_service.dart b/lib/features/complaints/presentation/services/complaint_location_service.dart
+new file mode 100644
+index 0000000..9b62ea2
+--- /dev/null
++++ b/lib/features/complaints/presentation/services/complaint_location_service.dart
+@@ -0,0 +1,96 @@
++import 'dart:async';
++
++import 'package:geolocator/geolocator.dart';
++
++import '../models/complaint_location.dart';
++
++enum ComplaintLocationFailureKind {
++  serviceDisabled,
++  permissionDenied,
++  permissionDeniedForever,
++  timeout,
++  unavailable,
++}
++
++class ComplaintLocationFailure implements Exception {
++  const ComplaintLocationFailure(this.kind, this.message);
++
++  final ComplaintLocationFailureKind kind;
++  final String message;
++
++  bool get canOpenSettings =>
++      kind == ComplaintLocationFailureKind.serviceDisabled ||
++      kind == ComplaintLocationFailureKind.permissionDeniedForever;
++
++  @override
++  String toString() => message;
++}
++
++abstract class ComplaintLocationService {
++  Future<ComplaintLocation> getCurrentLocation();
++
++  Future<bool> openSettings(ComplaintLocationFailureKind kind);
++}
++
++class GeolocatorComplaintLocationService
++    implements ComplaintLocationService {
++  const GeolocatorComplaintLocationService();
++
++  @override
++  Future<ComplaintLocation> getCurrentLocation() async {
++    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
++    if (!serviceEnabled) {
++      throw const ComplaintLocationFailure(
++        ComplaintLocationFailureKind.serviceDisabled,
++        'خدمة الموقع غير مفعّلة. فعّل GPS ثم حاول مجددًا.',
++      );
++    }
++
++    var permission = await Geolocator.checkPermission();
++    if (permission == LocationPermission.denied) {
++      permission = await Geolocator.requestPermission();
++    }
++
++    if (permission == LocationPermission.denied) {
++      throw const ComplaintLocationFailure(
++        ComplaintLocationFailureKind.permissionDenied,
++        'لم يتم منح إذن الموقع. يمكنك اختيار الموقع يدويًا من الخريطة.',
++      );
++    }
++    if (permission == LocationPermission.deniedForever) {
++      throw const ComplaintLocationFailure(
++        ComplaintLocationFailureKind.permissionDeniedForever,
++        'إذن الموقع مرفوض نهائيًا. فعّله من إعدادات التطبيق أو اختر الموقع يدويًا.',
++      );
++    }
++
++    try {
++      final position = await Geolocator.getCurrentPosition(
++        desiredAccuracy: LocationAccuracy.high,
++        timeLimit: const Duration(seconds: 20),
++      );
++      return ComplaintLocation(
++        latitude: position.latitude,
++        longitude: position.longitude,
++      );
++    } on TimeoutException {
++      throw const ComplaintLocationFailure(
++        ComplaintLocationFailureKind.timeout,
++        'تعذر تثبيت موقعك بسرعة. اقترب من نافذة أو اختر الموقع يدويًا.',
++      );
++    } catch (_) {
++      throw const ComplaintLocationFailure(
++        ComplaintLocationFailureKind.unavailable,
++        'تعذر تحديد موقعك الآن. حاول مجددًا أو اختر الموقع يدويًا.',
++      );
++    }
++  }
++
++  @override
++  Future<bool> openSettings(ComplaintLocationFailureKind kind) {
++    if (kind == ComplaintLocationFailureKind.serviceDisabled) {
++      return Geolocator.openLocationSettings();
++    }
++    return Geolocator.openAppSettings();
++  }
++}
+diff --git a/test/features/complaints/complaints_screen_test.dart b/test/features/complaints/complaints_screen_test.dart
+index cdea41c..36283f7 100644
+--- a/test/features/complaints/complaints_screen_test.dart
++++ b/test/features/complaints/complaints_screen_test.dart
+@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
+ 
+ import 'package:electronic_municipality/features/complaints/data/models/complaint_models.dart';
+ import 'package:electronic_municipality/features/complaints/domain/complaints_repository.dart';
++import 'package:electronic_municipality/features/complaints/presentation/screens/complaint_location_picker_screen.dart';
+ import 'package:electronic_municipality/features/complaints/presentation/screens/complaints_screen.dart';
+ 
+ void main() {
+@@ -12,8 +13,8 @@ void main() {
+     WidgetTester tester,
+   ) async {
+     final repository = _ComplaintsRepositoryFake();
+-    tester.view.physicalSize = const Size(800, 1400);
+-    addTearDown(tester.view.resetPhysicalSize);
++    await tester.binding.setSurfaceSize(const Size(800, 1400));
++    addTearDown(() => tester.binding.setSurfaceSize(null));
+ 
+     await tester.pumpWidget(
+       MaterialApp(
+@@ -21,6 +22,10 @@ void main() {
+           body: ComplaintsScreen(
+             repository: repository,
+             municipalityId: 12,
++            locationSelector: (_, __) async => const ComplaintLocation(
++              latitude: 33.5138,
++              longitude: 36.2765,
++            ),
+             imagePicker: () async => <ComplaintAttachment>[
+               ComplaintAttachment(
+                 name: 'evidence.jpg',
+@@ -46,19 +51,21 @@ void main() {
+       find.byKey(const ValueKey('complaint_description_field')),
+       'انقطاع المياه منذ الصباح',
+     );
+-    await tester.enterText(
+-      find.byKey(const ValueKey('complaint_latitude_field')),
+-      '33.5138',
+-    );
+-    await tester.enterText(
+-      find.byKey(const ValueKey('complaint_longitude_field')),
+-      '36.2765',
+-    );
+-
+     await tester.testTextInput.receiveAction(TextInputAction.done);
+     await tester.pump();
+     final complaintsList = find.byType(ListView);
+ 
++    final selectLocation =
++        find.byKey(const ValueKey('select_complaint_location'));
++    await tester.dragUntilVisible(
++      selectLocation,
++      complaintsList,
++      const Offset(0, -200),
++    );
++    await tester.tap(selectLocation);
++    await tester.pumpAndSettle();
++    expect(find.text('33.513800, 36.276500'), findsOneWidget);
++
+     final pickImages = find.byKey(const ValueKey('pick_complaint_images'));
+     await tester.dragUntilVisible(
+       pickImages,
+@@ -85,6 +92,8 @@ void main() {
+         'submit:51',
+       ],
+     );
++    expect(repository.createdInput?.latitude, 33.5138);
++    expect(repository.createdInput?.longitude, 36.2765);
+     expect(find.text('مرسلة'), findsOneWidget);
+     expect(
+       find.byKey(const ValueKey('edit_complaint_51')),
+@@ -99,6 +108,7 @@ void main() {
+ 
+ class _ComplaintsRepositoryFake implements ComplaintsRepository {
+   final List<String> mutations = <String>[];
++  ComplaintDraftInput? createdInput;
+   ComplaintReport? _report;
+ 
+   static const _water = ComplaintCategory(
+@@ -124,6 +134,7 @@ class _ComplaintsRepositoryFake implements ComplaintsRepository {
+ 
+   @override
+   Future<ComplaintReport> createDraft(ComplaintDraftInput input) async {
++    createdInput = input;
+     mutations.add(
+       'create:${input.municipalityId}:${input.categoryId}',
+     );
+diff --git a/test/features/complaints/complaint_location_picker_screen_test.dart b/test/features/complaints/complaint_location_picker_screen_test.dart
+new file mode 100644
+index 0000000..a19861a
+--- /dev/null
++++ b/test/features/complaints/complaint_location_picker_screen_test.dart
+@@ -0,0 +1,78 @@
++import 'package:flutter/material.dart';
++import 'package:flutter_test/flutter_test.dart';
++
++import 'package:electronic_municipality/features/complaints/presentation/screens/complaint_location_picker_screen.dart';
++import 'package:electronic_municipality/features/complaints/presentation/services/complaint_location_service.dart';
++
++void main() {
++  testWidgets('uses the device location and returns its coordinates', (
++    WidgetTester tester,
++  ) async {
++    await tester.binding.setSurfaceSize(const Size(800, 1000));
++    addTearDown(() => tester.binding.setSurfaceSize(null));
++    final service = _LocationServiceFake();
++    ComplaintLocation? result;
++
++    await tester.pumpWidget(
++      MaterialApp(
++        home: Builder(
++          builder: (context) => Scaffold(
++            body: Center(
++              child: FilledButton(
++                onPressed: () async {
++                  result = await Navigator.of(context).push<ComplaintLocation>(
++                    MaterialPageRoute<ComplaintLocation>(
++                      builder: (_) => ComplaintLocationPickerScreen(
++                        locationService: service,
++                        mapOverride: const ColoredBox(
++                          color: Color(0xFFE6ECE9),
++                        ),
++                      ),
++                    ),
++                  );
++                },
++                child: const Text('open'),
++              ),
++            ),
++          ),
++        ),
++      ),
++    );
++
++    await tester.tap(find.text('open'));
++    await tester.pumpAndSettle();
++    await tester.tap(
++      find.byKey(const ValueKey('use_current_complaint_location')),
++    );
++    await tester.pumpAndSettle();
++
++    expect(service.calls, 1);
++    expect(find.text('33.513800\n36.276500'), findsNothing);
++    expect(find.textContaining('33.513800'), findsOneWidget);
++    expect(find.textContaining('36.276500'), findsOneWidget);
++
++    await tester.tap(
++      find.byKey(const ValueKey('confirm_complaint_location')),
++    );
++    await tester.pumpAndSettle();
++
++    expect(result?.latitude, 33.5138);
++    expect(result?.longitude, 36.2765);
++  });
++}
++
++class _LocationServiceFake implements ComplaintLocationService {
++  int calls = 0;
++
++  @override
++  Future<ComplaintLocation> getCurrentLocation() async {
++    calls++;
++    return const ComplaintLocation(
++      latitude: 33.5138,
++      longitude: 36.2765,
++    );
++  }
++
++  @override
++  Future<bool> openSettings(ComplaintLocationFailureKind kind) async => true;
++}

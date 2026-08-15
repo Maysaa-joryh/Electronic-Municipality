@@ -37,6 +37,38 @@ void main() {
     expect(ComplaintEndpoints.categories, 'ComplaintCategories');
   });
 
+  test('inactive complaint categories are excluded while older APIs stay compatible', () {
+    final root = ComplaintCategory.fromJson(
+      <String, dynamic>{
+        'id': 1,
+        'name': 'الخدمات',
+        'is_active': true,
+        'children': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 2,
+            'parent_id': 1,
+            'name': 'خدمة فعالة',
+            'is_active': true,
+          },
+          <String, dynamic>{
+            'id': 3,
+            'parent_id': 1,
+            'name': 'خدمة معطلة',
+            'is_active': false,
+          },
+        ],
+      },
+    );
+
+    expect(root.isActive, isTrue);
+    expect(root.children.map((item) => item.id), <int>[2]);
+    expect(
+      ComplaintCategory.fromJson(<String, dynamic>{'id': 4, 'name': 'قديمة'})
+          .isActive,
+      isTrue,
+    );
+  });
+
   test('draft request uses exactly the Laravel complaint field names', () {
     const input = ComplaintDraftInput(
       municipalityId: 12,
@@ -206,6 +238,59 @@ void main() {
     expect(resolved.host, api.host);
     expect(resolved.port, api.port);
     expect(resolved.path, '/storage/image.jpg');
+  });
+
+  test('detail response parses public complaint status history', () {
+    final report = ComplaintReport.fromJson(
+      <String, dynamic>{
+        'id': 21,
+        'status': <String, dynamic>{'key': 'submitted', 'name': 'مرسلة'},
+        'images': <Object>[],
+        'status_history': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 5,
+            'from_status': <String, dynamic>{'key': 'draft', 'name': 'مسودة'},
+            'to_status': <String, dynamic>{
+              'key': 'submitted',
+              'name': 'مرسلة',
+            },
+            'changed_by': <String, dynamic>{'full_name': 'مواطن تجريبي'},
+            'note': 'تم إرسال الشكوى.',
+            'created_at': '2026-08-15T10:30:00.000000Z',
+          },
+        ],
+      },
+    );
+
+    expect(report.statusHistory, hasLength(1));
+    expect(report.statusHistory.single.fromStatus?.key, 'draft');
+    expect(report.statusHistory.single.toStatus?.label, 'مرسلة');
+    expect(report.statusHistory.single.changedByName, 'مواطن تجريبي');
+  });
+
+  test('paginated reports match the Laravel items and pagination envelope', () {
+    final page = ComplaintReportsPage.fromJson(
+      <String, dynamic>{
+        'items': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 11,
+            'status': <String, dynamic>{'key': 'draft', 'name': 'مسودة'},
+            'images': <Object>[],
+          },
+        ],
+        'pagination': <String, dynamic>{
+          'current_page': 1,
+          'last_page': 3,
+          'per_page': 15,
+          'total': 33,
+        },
+      },
+    );
+
+    expect(page.items.single.id, 11);
+    expect(page.currentPage, 1);
+    expect(page.total, 33);
+    expect(page.hasNextPage, isTrue);
   });
 
   test('draft status is fallback when can_edit is absent', () {

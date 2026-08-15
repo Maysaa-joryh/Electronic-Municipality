@@ -1,6 +1,8 @@
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import 'package:electronic_municipality/l10n/localized_text.dart';
+import 'package:electronic_municipality/l10n/app_localizations.dart';
 import '../../app/design_system.dart';
 import '../../app/theme/app_colors.dart';
 import '../../core/constants/app_assets.dart';
@@ -41,12 +43,12 @@ class MunicipalityTextField extends StatelessWidget {
           const SizedBox(height: 8),
         ],
         TextField(
-          textDirection: TextDirection.rtl,
+          textDirection: Directionality.of(context),
           obscureText: obscureText,
           maxLines: maxLines,
           minLines: maxLines,
           decoration: InputDecoration(
-            hintText: hint,
+            hintText: context.tr(hint),
             hintStyle: const TextStyle(color: Color(0xFF9B9D9A)),
             filled: true,
             fillColor: AppColors.surface,
@@ -588,11 +590,13 @@ class ReadonlyField extends StatelessWidget {
       {super.key,
       required this.label,
       required this.value,
-      this.dropdown = false});
+      this.dropdown = false,
+      this.translateValue = false});
 
   final String label;
   final String value;
   final bool dropdown;
+  final bool translateValue;
 
   @override
   Widget build(BuildContext context) {
@@ -612,6 +616,7 @@ class ReadonlyField extends StatelessWidget {
             const Icon(Icons.keyboard_arrow_down, color: AppColors.muted),
           Expanded(
               child: Text(value,
+                  translate: translateValue,
                   textAlign: TextAlign.end,
                   style:
                       const TextStyle(color: AppColors.muted, fontSize: 14))),

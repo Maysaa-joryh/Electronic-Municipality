@@ -27,6 +27,7 @@ void main() {
             locationSelector: (_, __) async => const ComplaintLocation(
               latitude: 33.5138,
               longitude: 36.2765,
+              placeDescription: 'شارع النصر، دمشق',
             ),
             imagePicker: () async => <ComplaintAttachment>[
               ComplaintAttachment(
@@ -74,6 +75,18 @@ void main() {
     await tester.tap(selectLocation);
     await tester.pumpAndSettle();
     expect(find.text('33.513800, 36.276500'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(
+            find.descendant(
+              of: find.byKey(const ValueKey('complaint_text_location_field')),
+              matching: find.byType(TextField),
+            ),
+          )
+          .controller
+          ?.text,
+      'شارع النصر، دمشق',
+    );
 
     final pickImages = find.byKey(const ValueKey('pick_complaint_images'));
     await tester.dragUntilVisible(
@@ -229,6 +242,20 @@ void main() {
       find.byKey(const ValueKey('complaint_image_5')),
       findsOneWidget,
     );
+    expect(
+      find.byKey(
+        const ValueKey('complaint_status_history_91'),
+        skipOffstage: false,
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining(
+        'تمت إحالة الشكوى إلى الوحدة المختصة.',
+        skipOffstage: false,
+      ),
+      findsOneWidget,
+    );
   });
 }
 
@@ -257,6 +284,21 @@ class _ComplaintsRepositoryFake implements ComplaintsRepository {
   @override
   Future<List<ComplaintReport>> getReports() async {
     return <ComplaintReport>[if (_report != null) _report!];
+  }
+
+  @override
+  Future<ComplaintReportsPage> getReportsPage({
+    int page = 1,
+    int perPage = 15,
+  }) async {
+    final reports = await getReports();
+    return ComplaintReportsPage(
+      items: reports,
+      currentPage: page,
+      lastPage: page,
+      perPage: perPage,
+      total: reports.length,
+    );
   }
 
   @override
@@ -375,6 +417,18 @@ class _ComplaintsHistoryRepositoryFake implements ComplaintsRepository {
         fileSize: 149020,
       ),
     ],
+    statusHistory: <ComplaintStatusHistory>[
+      ComplaintStatusHistory(
+        id: 91,
+        fromStatus: const ComplaintStatus(key: 'submitted', label: 'مرسلة'),
+        toStatus: const ComplaintStatus(
+          key: 'in_progress',
+          label: 'قيد المعالجة',
+        ),
+        note: 'تمت إحالة الشكوى إلى الوحدة المختصة.',
+        createdAt: DateTime.utc(2026, 8, 15, 10, 30),
+      ),
+    ],
     municipalityId: 1,
     municipalityName: 'بلدية كفرسوسة',
     categoryId: 13,
@@ -403,6 +457,20 @@ class _ComplaintsHistoryRepositoryFake implements ComplaintsRepository {
   @override
   Future<List<ComplaintReport>> getReports() async {
     return <ComplaintReport>[report];
+  }
+
+  @override
+  Future<ComplaintReportsPage> getReportsPage({
+    int page = 1,
+    int perPage = 15,
+  }) async {
+    return ComplaintReportsPage(
+      items: <ComplaintReport>[report],
+      currentPage: page,
+      lastPage: page,
+      perPage: perPage,
+      total: 1,
+    );
   }
 
   @override

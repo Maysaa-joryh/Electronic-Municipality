@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import 'package:electronic_municipality/l10n/localized_text.dart';
+import 'package:electronic_municipality/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../app/router.dart';
@@ -147,10 +149,6 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
       initialDate: _birthDate ?? DateTime(2000),
       firstDate: DateTime(1900),
       lastDate: DateTime(now.year, now.month, now.day),
-      builder: (context, child) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: child ?? const SizedBox.shrink(),
-      ),
     );
 
     if (selectedDate == null || !mounted) return;
@@ -338,7 +336,7 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                               ),
                               if (_governorates.isEmpty && !_isLoadingLocations)
                                 Align(
-                                  alignment: Alignment.centerRight,
+                                  alignment: AlignmentDirectional.centerStart,
                                   child: TextButton.icon(
                                     onPressed: _loadGovernorates,
                                     icon: const Icon(Icons.refresh_rounded),
@@ -349,7 +347,7 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
                                   _municipalities.isEmpty &&
                                   !_isLoadingMunicipalities)
                                 Align(
-                                  alignment: Alignment.centerRight,
+                                  alignment: AlignmentDirectional.centerStart,
                                   child: TextButton.icon(
                                     onPressed: () => _selectGovernorate(
                                       _selectedGovernorateId,
@@ -785,7 +783,7 @@ class _SignupTextField extends StatelessWidget {
     this.autofillHints,
     this.inputFormatters,
     this.onFieldSubmitted,
-    this.textDirection = TextDirection.rtl,
+    this.textDirection,
     this.textAlign = TextAlign.start,
   });
 
@@ -803,12 +801,14 @@ class _SignupTextField extends StatelessWidget {
   final Iterable<String>? autofillHints;
   final List<TextInputFormatter>? inputFormatters;
   final ValueChanged<String>? onFieldSubmitted;
-  final TextDirection textDirection;
+  final TextDirection? textDirection;
   final TextAlign textAlign;
   final FormFieldValidator<String> validator;
 
   @override
   Widget build(BuildContext context) {
+    final effectiveDirection =
+        textDirection ?? Directionality.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -818,13 +818,16 @@ class _SignupTextField extends StatelessWidget {
           style: _signupFieldLabelStyle,
         ),
         Align(
-          alignment: Alignment.centerRight,
+          alignment: AlignmentDirectional.centerStart,
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: maxWidth),
             child: TextFormField(
               key: fieldKey,
               controller: controller,
-              validator: validator,
+              validator: (value) {
+                final error = validator(value);
+                return error == null ? null : context.tr(error);
+              },
               obscureText: obscureText,
               obscuringCharacter: '•',
               autocorrect: autocorrect,
@@ -834,13 +837,13 @@ class _SignupTextField extends StatelessWidget {
               autofillHints: autofillHints,
               inputFormatters: inputFormatters,
               onFieldSubmitted: onFieldSubmitted,
-              textDirection: textDirection,
+              textDirection: effectiveDirection,
               textAlign: textAlign,
               style: _signupFieldTextStyle,
               decoration: _signupInputDecoration(
-                hint: hint,
+                hint: context.tr(hint),
                 height: inputHeight,
-                hintDirection: textDirection,
+                hintDirection: effectiveDirection,
               ),
             ),
           ),
@@ -872,7 +875,7 @@ class _SignupDateField extends StatelessWidget {
           style: _signupFieldLabelStyle,
         ),
         Align(
-          alignment: Alignment.centerRight,
+          alignment: AlignmentDirectional.centerStart,
           child: ConstrainedBox(
             constraints: const BoxConstraints(
               maxWidth: _signupFieldMaxWidth,
@@ -880,7 +883,10 @@ class _SignupDateField extends StatelessWidget {
             child: TextFormField(
               key: const ValueKey('signup_birth_date_field'),
               controller: controller,
-              validator: validator,
+              validator: (value) {
+                final error = validator(value);
+                return error == null ? null : context.tr(error);
+              },
               readOnly: true,
               onTap: onTap,
               textDirection: TextDirection.ltr,
@@ -943,13 +949,16 @@ class _SignupDropdownField<T> extends StatelessWidget {
           style: _signupFieldLabelStyle,
         ),
         Align(
-          alignment: Alignment.centerRight,
+          alignment: AlignmentDirectional.centerStart,
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: maxWidth),
             child: DropdownButtonFormField<T>(
               key: fieldKey,
               value: value,
-              validator: validator,
+              validator: (value) {
+                final error = validator(value);
+                return error == null ? null : context.tr(error);
+              },
               onChanged: onChanged,
               isExpanded: true,
               menuMaxHeight: 320,
@@ -981,7 +990,7 @@ class _SignupDropdownField<T> extends StatelessWidget {
               decoration: _signupInputDecoration(
                 hint: '',
                 height: _signupFieldHeight,
-                hintDirection: TextDirection.rtl,
+                hintDirection: Directionality.of(context),
               ).copyWith(
                 contentPadding: const EdgeInsetsDirectional.fromSTEB(
                   12,

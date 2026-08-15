@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import 'package:electronic_municipality/l10n/localized_text.dart';
 
 import '../../../../app/router.dart';
 import '../../../../app/theme/app_colors.dart';
@@ -133,7 +134,11 @@ class TransactionCard extends StatelessWidget {
                     style: const TextStyle(
                         fontSize: 18, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 4),
-                Text(id, style: const TextStyle(color: AppColors.muted))
+                Text(
+                  id,
+                  translate: false,
+                  style: const TextStyle(color: AppColors.muted),
+                )
               ])),
           StatusPill(
               label: status, color: done ? AppColors.primary : AppColors.gold)

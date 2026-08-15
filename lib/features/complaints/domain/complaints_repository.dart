@@ -5,6 +5,11 @@ abstract class ComplaintsRepository {
 
   Future<List<ComplaintReport>> getReports();
 
+  Future<ComplaintReportsPage> getReportsPage({
+    int page = 1,
+    int perPage = 15,
+  });
+
   Future<ComplaintReport> getReport(int reportId);
 
   Future<ComplaintReport> createDraft(ComplaintDraftInput input);

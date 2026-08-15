@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import 'package:electronic_municipality/l10n/localized_text.dart';
+import 'package:electronic_municipality/l10n/app_localizations.dart';
 
 import '../../../../app/design_system.dart';
 import '../../../../app/router.dart';
@@ -270,7 +272,7 @@ class _AuthLoginScreenState extends State<AuthLoginScreen> {
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Align(
-                    alignment: Alignment.centerRight,
+                    alignment: AlignmentDirectional.centerStart,
                     child: TextButton(
                       onPressed: _isLoading
                           ? null
@@ -552,15 +554,18 @@ class _LabeledLoginField extends StatelessWidget {
         const SizedBox(height: AppSpacing.sm),
         TextFormField(
           controller: controller,
-          validator: validator,
+          validator: (value) {
+            final error = validator(value);
+            return error == null ? null : context.tr(error);
+          },
           obscureText: obscureText,
           keyboardType: keyboardType,
           textInputAction: textInputAction,
           autofillHints: autofillHints,
           onFieldSubmitted: onSubmitted,
-          textDirection: TextDirection.rtl,
+          textDirection: TextDirection.ltr,
           decoration: InputDecoration(
-            hintText: hint,
+            hintText: context.tr(hint),
             prefixIcon: Icon(
               prefixIcon,
               color: AppColors.muted,

@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import 'package:electronic_municipality/l10n/localized_text.dart';
+import 'package:electronic_municipality/l10n/app_localizations.dart';
 
 import '../../../../app/router.dart';
 import '../../../../app/theme/app_colors.dart';
@@ -334,7 +336,7 @@ class _ResetPasswordFieldState extends State<_ResetPasswordField> {
           obscuringCharacter: '•',
           autocorrect: false,
           enableSuggestions: false,
-          textDirection: TextDirection.rtl,
+          textDirection: TextDirection.ltr,
           textInputAction: widget.textInputAction,
           style: const TextStyle(
             color: Color(0xFF1B1C19),
@@ -342,8 +344,8 @@ class _ResetPasswordFieldState extends State<_ResetPasswordField> {
             height: 1.5,
           ),
           decoration: InputDecoration(
-            hintText: widget.hint,
-            hintTextDirection: TextDirection.rtl,
+            hintText: context.tr(widget.hint),
+            hintTextDirection: Directionality.of(context),
             hintStyle: const TextStyle(
               color: Color(0x80414844),
               fontSize: 16,
@@ -372,7 +374,9 @@ class _ResetPasswordFieldState extends State<_ResetPasswordField> {
               minHeight: 48,
             ),
             suffixIcon: IconButton(
-              tooltip: _obscureText ? 'إظهار كلمة المرور' : 'إخفاء كلمة المرور',
+              tooltip: context.tr(
+                _obscureText ? 'إظهار كلمة المرور' : 'إخفاء كلمة المرور',
+              ),
               onPressed: () => setState(() => _obscureText = !_obscureText),
               padding: EdgeInsets.zero,
               splashRadius: 20,

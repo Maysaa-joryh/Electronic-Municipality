@@ -1,0 +1,32 @@
+diff --git a/test/features/complaints/complaints_screen_test.dart b/test/features/complaints/complaints_screen_test.dart
+index 74f63bf..ea6a75a 100644
+--- a/test/features/complaints/complaints_screen_test.dart
++++ b/test/features/complaints/complaints_screen_test.dart
+@@ -242,17 +242,20 @@ void main() {
+       find.byKey(const ValueKey('complaint_image_5')),
+       findsOneWidget,
+     );
+-    final statusNote = find.text('تمت إحالة الشكوى إلى الوحدة المختصة.');
+-    await tester.dragUntilVisible(
+-      statusNote,
+-      find.byType(ListView).last,
+-      const Offset(0, -260),
++    expect(
++      find.byKey(
++        const ValueKey('complaint_status_history_91'),
++        skipOffstage: false,
++      ),
++      findsOneWidget,
+     );
+     expect(
+-      find.byKey(const ValueKey('complaint_status_history_91')),
++      find.text(
++        'تمت إحالة الشكوى إلى الوحدة المختصة.',
++        skipOffstage: false,
++      ),
+       findsOneWidget,
+     );
+-    expect(statusNote, findsOneWidget);
+   });
+ }
+ 

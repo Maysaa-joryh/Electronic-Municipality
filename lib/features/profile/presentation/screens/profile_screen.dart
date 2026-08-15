@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import 'package:electronic_municipality/l10n/localized_text.dart';
+import 'package:electronic_municipality/l10n/app_localizations.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/di.dart';
@@ -169,7 +171,7 @@ class _ProfileHeader extends StatelessWidget {
             ),
             const Spacer(),
             IconButton(
-              tooltip: 'رجوع',
+              tooltip: context.tr('رجوع'),
               onPressed: () => Navigator.of(context).maybePop(),
               icon: const Icon(Icons.arrow_back_rounded),
             ),
@@ -214,6 +216,7 @@ class _ProfileSummary extends StatelessWidget {
           const SizedBox(height: 14),
           Text(
             user.displayName,
+            translate: false,
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: AppColors.text,
@@ -271,6 +274,7 @@ class _ContactItem extends StatelessWidget {
         Flexible(
           child: Text(
             text,
+            translate: false,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textDirection: TextDirection.ltr,
@@ -377,7 +381,7 @@ class _VerificationPanel extends StatelessWidget {
           ] else if (isPending) ...[
             const SizedBox(height: 14),
             Align(
-              alignment: Alignment.centerRight,
+              alignment: AlignmentDirectional.centerStart,
               child: TextButton.icon(
                 key: const ValueKey('refresh_verification_status'),
                 onPressed: isRefreshing ? null : onRefresh,
@@ -470,6 +474,7 @@ class _PersonalDataPanel extends StatelessWidget {
         _ProfileFieldData(
           label: 'الجنس',
           value: _genderValue(profile['gender']),
+          translateValue: true,
         ),
         _ProfileFieldData(
           label: 'مكان الولادة',
@@ -478,6 +483,7 @@ class _PersonalDataPanel extends StatelessWidget {
         _ProfileFieldData(
           label: 'الرعاية الخاصة',
           value: _booleanValue(profile['needs_special_care']),
+          translateValue: true,
         ),
       ] else
         _ProfileFieldData(
@@ -552,10 +558,12 @@ class _ProfileFieldData {
   const _ProfileFieldData({
     required this.label,
     required this.value,
+    this.translateValue = false,
   });
 
   final String label;
   final String value;
+  final bool translateValue;
 }
 
 class _ProfileFieldGrid extends StatelessWidget {
@@ -582,6 +590,7 @@ class _ProfileFieldGrid extends StatelessWidget {
                 child: ReadonlyField(
                   label: field.label,
                   value: field.value,
+                  translateValue: field.translateValue,
                 ),
               ),
           ],

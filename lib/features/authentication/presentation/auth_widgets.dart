@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import 'package:electronic_municipality/l10n/localized_text.dart';
 import 'package:electronic_municipality/app/router.dart';
 import 'package:electronic_municipality/app/theme/app_colors.dart';
 import 'package:electronic_municipality/core/di.dart';

@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import 'package:electronic_municipality/l10n/localized_text.dart';
+import 'package:electronic_municipality/l10n/app_localizations.dart';
 
 import '../../../../app/design_system.dart';
 import '../../../../app/router.dart';
@@ -127,7 +129,7 @@ class _ChangeTemporaryPasswordScreenState
                 obscureText: _obscureCurrent,
                 textInputAction: TextInputAction.next,
                 decoration: InputDecoration(
-                  labelText: 'كلمة المرور المؤقتة',
+                  labelText: context.tr('كلمة المرور المؤقتة'),
                   prefixIcon: const Icon(Icons.lock_clock_outlined),
                   suffixIcon: IconButton(
                     onPressed: () {
@@ -141,7 +143,7 @@ class _ChangeTemporaryPasswordScreenState
                   ),
                 ),
                 validator: (value) => value == null || value.isEmpty
-                    ? 'كلمة المرور المؤقتة مطلوبة'
+                    ? context.tr('كلمة المرور المؤقتة مطلوبة')
                     : null,
               ),
               const SizedBox(height: AppSpacing.lg),
@@ -151,7 +153,7 @@ class _ChangeTemporaryPasswordScreenState
                 obscureText: _obscureNew,
                 textInputAction: TextInputAction.next,
                 decoration: InputDecoration(
-                  labelText: 'كلمة المرور الجديدة',
+                  labelText: context.tr('كلمة المرور الجديدة'),
                   prefixIcon: const Icon(Icons.lock_reset_outlined),
                   suffixIcon: IconButton(
                     onPressed: () => setState(() => _obscureNew = !_obscureNew),
@@ -164,13 +166,13 @@ class _ChangeTemporaryPasswordScreenState
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'كلمة المرور الجديدة مطلوبة';
+                    return context.tr('كلمة المرور الجديدة مطلوبة');
                   }
                   if (value.length < 8) {
-                    return 'يجب ألا تقل كلمة المرور عن 8 محارف';
+                    return context.tr('يجب ألا تقل كلمة المرور عن 8 محارف');
                   }
                   if (value == _currentPasswordController.text) {
-                    return 'يجب أن تختلف عن كلمة المرور المؤقتة';
+                    return context.tr('يجب أن تختلف عن كلمة المرور المؤقتة');
                   }
                   return null;
                 },
@@ -184,12 +186,12 @@ class _ChangeTemporaryPasswordScreenState
                 onFieldSubmitted: (_) {
                   if (!_isLoading) _submit();
                 },
-                decoration: const InputDecoration(
-                  labelText: 'تأكيد كلمة المرور الجديدة',
-                  prefixIcon: Icon(Icons.verified_user_outlined),
+                decoration: InputDecoration(
+                  labelText: context.tr('تأكيد كلمة المرور الجديدة'),
+                  prefixIcon: const Icon(Icons.verified_user_outlined),
                 ),
                 validator: (value) => value != _newPasswordController.text
-                    ? 'كلمات المرور غير متطابقة'
+                    ? context.tr('كلمات المرور غير متطابقة')
                     : null,
               ),
               const SizedBox(height: AppSpacing.xxl),

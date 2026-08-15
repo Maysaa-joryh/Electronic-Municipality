@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 
 import '../../../../app/theme/app_colors.dart';
+import '../../../../l10n/localized_text.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../shared/widgets/municipality_widgets.dart';
 import '../../data/models/complaint_models.dart';
@@ -89,6 +90,8 @@ class _ComplaintDetailsScreenState extends State<ComplaintDetailsScreen> {
                             _LocationCard(report: _report),
                             const SizedBox(height: 14),
                             _ImagesCard(images: _report.images),
+                            const SizedBox(height: 14),
+                            _StatusHistoryCard(history: _report.statusHistory),
                             const SizedBox(height: 14),
                             _TimelineCard(report: _report),
                           ],
@@ -532,6 +535,94 @@ class _FullScreenImage extends StatelessWidget {
   }
 }
 
+class _StatusHistoryCard extends StatelessWidget {
+  const _StatusHistoryCard({required this.history});
+
+  final List<ComplaintStatusHistory> history;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppPanel(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SectionHeading(
+            icon: Icons.swap_horiz_rounded,
+            title: 'تاريخ الحالة',
+            trailing: history.isEmpty ? null : '${history.length}',
+          ),
+          const SizedBox(height: 15),
+          if (history.isEmpty)
+            const Text(
+              'لا توجد تحديثات عامة على حالة الشكوى حتى الآن.',
+              style: TextStyle(color: AppColors.muted),
+            )
+          else
+            for (final item in history) ...[
+              _StatusHistoryRow(history: item),
+              if (item != history.last) const SizedBox(height: 10),
+            ],
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusHistoryRow extends StatelessWidget {
+  const _StatusHistoryRow({required this.history});
+
+  final ComplaintStatusHistory history;
+
+  @override
+  Widget build(BuildContext context) {
+    final details = <String>[
+      if (history.note?.trim().isNotEmpty == true) history.note!,
+      if (history.changedByName?.trim().isNotEmpty == true)
+        'بواسطة ${history.changedByName}',
+      if (history.createdAt != null) _formatDate(history.createdAt!),
+    ];
+
+    return Container(
+      key: ValueKey('complaint_status_history_${history.id}'),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.sync_alt_rounded, color: AppColors.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _statusHistoryTitle(history),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                if (details.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    details.join(' • '),
+                    style: const TextStyle(
+                      color: AppColors.muted,
+                      fontSize: 12.5,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _TimelineCard extends StatelessWidget {
   const _TimelineCard({required this.report});
 
@@ -716,6 +807,14 @@ class _DetailsNotice extends StatelessWidget {
       ),
     );
   }
+}
+
+String _statusHistoryTitle(ComplaintStatusHistory history) {
+  final from = history.fromStatus?.label;
+  final to = history.toStatus?.label;
+  if (from != null && to != null) return 'تغيّرت الحالة من $from إلى $to';
+  if (to != null) return 'تغيّرت الحالة إلى $to';
+  return 'تحديث على حالة الشكوى';
 }
 
 String _formatDate(DateTime value) {

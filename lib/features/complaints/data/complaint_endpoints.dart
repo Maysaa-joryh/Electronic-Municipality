@@ -2,6 +2,7 @@ abstract final class ComplaintEndpoints {
   static const String categories = 'ComplaintCategories';
   static const String reports = 'citizen/complaints';
   static const String drafts = 'citizen/complaints/drafts';
+  static const String unifiedComplaints = 'unified-complaints';
 
   static String report(int reportId) => '$reports/$reportId';
 

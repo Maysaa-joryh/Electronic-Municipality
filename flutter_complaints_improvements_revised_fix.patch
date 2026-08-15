@@ -1,0 +1,72 @@
+diff --git a/lib/features/complaints/data/models/complaint_models.dart b/lib/features/complaints/data/models/complaint_models.dart
+index f8e5484..50f1182 100644
+--- a/lib/features/complaints/data/models/complaint_models.dart
++++ b/lib/features/complaints/data/models/complaint_models.dart
+@@ -411,7 +411,7 @@ String _requiredStringFromKeys(
+     final value = _nullableString(json[key]);
+     if (value != null) return value;
+   }
+-  throw FormatException('Missing complaint image URL.');
++  throw const FormatException('Missing complaint image URL.');
+ }
+ 
+ int _requiredInt(Map<String, dynamic> json, String key) {
+diff --git a/lib/features/complaints/presentation/screens/complaints_screen.dart b/lib/features/complaints/presentation/screens/complaints_screen.dart
+index 94f4f08..6568a97 100644
+--- a/lib/features/complaints/presentation/screens/complaints_screen.dart
++++ b/lib/features/complaints/presentation/screens/complaints_screen.dart
+@@ -334,15 +334,17 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+         ? null
+         : ComplaintLocation(latitude: latitude, longitude: longitude);
+ 
+-    final selected = widget.locationSelector == null
+-        ? await Navigator.of(context).push<ComplaintLocation>(
++    final locationSelector = widget.locationSelector;
++    final selectionFuture = locationSelector == null
++        ? Navigator.of(context).push<ComplaintLocation>(
+             MaterialPageRoute<ComplaintLocation>(
+               builder: (_) => ComplaintLocationPickerScreen(
+                 initialLocation: initial,
+               ),
+             ),
+           )
+-        : await widget.locationSelector!(context, initial);
++        : locationSelector(context, initial);
++    final selected = await selectionFuture;
+     if (selected == null || !mounted) return;
+ 
+     final errors = Map<String, List<String>>.of(_fieldErrors)
+diff --git a/test/features/complaints/complaints_screen_test.dart b/test/features/complaints/complaints_screen_test.dart
+index 2347eb0..1bbadbc 100644
+--- a/test/features/complaints/complaints_screen_test.dart
++++ b/test/features/complaints/complaints_screen_test.dart
+@@ -78,7 +78,10 @@ void main() {
+     expect(
+       tester
+           .widget<TextField>(
+-            find.byKey(const ValueKey('complaint_text_location_field')),
++            find.descendant(
++              of: find.byKey(const ValueKey('complaint_text_location_field')),
++              matching: find.byType(TextField),
++            ),
+           )
+           .controller
+           ?.text,
+@@ -239,10 +242,14 @@ void main() {
+       find.byKey(const ValueKey('complaint_image_5')),
+       findsOneWidget,
+     );
+-    expect(
+-      find.byKey(const ValueKey('complaint_status_history_91')),
+-      findsOneWidget,
++    final historyItem =
++        find.byKey(const ValueKey('complaint_status_history_91'));
++    await tester.dragUntilVisible(
++      historyItem,
++      find.byType(ListView).last,
++      const Offset(0, -260),
+     );
++    expect(historyItem, findsOneWidget);
+     expect(find.text('تمت إحالة الشكوى إلى الوحدة المختصة.'), findsOneWidget);
+   });
+ }

@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import 'package:electronic_municipality/l10n/localized_text.dart';
+import 'package:electronic_municipality/l10n/app_localizations.dart';
 
 import '../../../../app/design_system.dart';
 import '../../../../app/router.dart';
@@ -143,7 +145,7 @@ class _SplashProgressBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: 'جارٍ تحميل بوابة المواطن الرقمية',
+      label: context.tr('جارٍ تحميل بوابة المواطن الرقمية'),
       child: AnimatedBuilder(
         animation: animation,
         builder: (context, child) {
@@ -158,7 +160,7 @@ class _SplashProgressBar extends StatelessWidget {
               borderRadius: BorderRadius.circular(2),
             ),
             child: Align(
-              alignment: Alignment.centerRight,
+              alignment: AlignmentDirectional.centerStart,
               child: Container(
                 width: width * progress,
                 height: 4,

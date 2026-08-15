@@ -16,6 +16,7 @@ class ComplaintsRemoteDataSource {
     try {
       return _requiredListData(envelope)
           .map(ComplaintCategory.fromJson)
+          .where((category) => category.isActive)
           .toList(growable: false);
     } on FormatException catch (error) {
       throw ApiException.invalidResponse(cause: error);
@@ -23,20 +24,36 @@ class ComplaintsRemoteDataSource {
   }
 
   Future<List<ComplaintReport>> getReports() async {
-    final envelope = await _client.get(ComplaintEndpoints.reports);
+    final reportsPage = await getReportsPage();
+    return reportsPage.items;
+  }
+
+  Future<ComplaintReportsPage> getReportsPage({
+    int page = 1,
+    int perPage = 15,
+  }) async {
+    if (page < 1 || perPage < 1) {
+      throw const ApiException(
+        kind: ApiExceptionKind.configuration,
+        message: 'إعدادات تحميل سجل الشكاوى غير صالحة.',
+      );
+    }
+
+    final envelope = await _client.get(
+      ComplaintEndpoints.reports,
+      queryParameters: <String, dynamic>{
+        'page': page,
+        'per_page': perPage,
+      },
+    );
 
     try {
       final data = _requiredSuccessfulData(envelope);
       final dataMap = _nullableMap(data);
-      final items = data is Iterable
-          ? data
-          : dataMap?['items'] ??
-              dataMap?['data'] ??
-              dataMap?['reports'] ??
-              dataMap?['complaints'];
-      return _requiredMapList(items)
-          .map(ComplaintReport.fromJson)
-          .toList(growable: false);
+      if (dataMap == null) {
+        throw const FormatException('Missing complaint reports page data.');
+      }
+      return ComplaintReportsPage.fromJson(dataMap);
     } on FormatException catch (error) {
       throw ApiException.invalidResponse(cause: error);
     }

@@ -1,0 +1,13 @@
+diff --git a/lib/features/home/presentation/screens/home_screen.dart b/lib/features/home/presentation/screens/home_screen.dart
+index 7ed5d04..0ab9600 100644
+--- a/lib/features/home/presentation/screens/home_screen.dart
++++ b/lib/features/home/presentation/screens/home_screen.dart
+@@ -350,7 +350,7 @@ class _QuickServiceCard extends StatelessWidget {
+       child: InkWell(
+         onTap: onTap,
+         child: Container(
+-          constraints: const BoxConstraints(minHeight: 178),
++          height: 178,
+           padding: const EdgeInsets.all(15),
+           decoration: BoxDecoration(
+             borderRadius: BorderRadius.circular(20),

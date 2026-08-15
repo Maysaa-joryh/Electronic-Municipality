@@ -9,6 +9,7 @@ class ComplaintCategory {
     required this.name,
     this.parentId,
     this.key,
+    this.isActive = true,
     this.children = const <ComplaintCategory>[],
   });
 
@@ -18,8 +19,10 @@ class ComplaintCategory {
       name: _requiredString(json, 'name'),
       parentId: _nullableInt(json['parent_id']),
       key: _nullableString(json['key']),
+      isActive: _nullableBool(json['is_active']) ?? true,
       children: _mapList(json['children'])
           .map(ComplaintCategory.fromJson)
+          .where((category) => category.isActive)
           .toList(growable: false),
     );
   }
@@ -28,6 +31,7 @@ class ComplaintCategory {
   final int? parentId;
   final String? key;
   final String name;
+  final bool isActive;
   final List<ComplaintCategory> children;
 
   bool get isGroup => parentId == null && children.isNotEmpty;
@@ -71,6 +75,36 @@ class ComplaintStatus {
   bool get isDraft => key.toLowerCase() == 'draft';
 }
 
+class ComplaintStatusHistory {
+  const ComplaintStatusHistory({
+    required this.id,
+    this.fromStatus,
+    this.toStatus,
+    this.changedByName,
+    this.note,
+    this.createdAt,
+  });
+
+  factory ComplaintStatusHistory.fromJson(Map<String, dynamic> json) {
+    return ComplaintStatusHistory(
+      id: _requiredInt(json, 'id'),
+      fromStatus: _nullableComplaintStatus(json['from_status']),
+      toStatus: _nullableComplaintStatus(json['to_status']),
+      changedByName:
+          _nullableString(_nullableMap(json['changed_by'])?['full_name']),
+      note: _nullableString(json['note']),
+      createdAt: _nullableDateTime(json['created_at']),
+    );
+  }
+
+  final int id;
+  final ComplaintStatus? fromStatus;
+  final ComplaintStatus? toStatus;
+  final String? changedByName;
+  final String? note;
+  final DateTime? createdAt;
+}
+
 class ComplaintImage {
   const ComplaintImage({
     required this.id,
@@ -109,6 +143,7 @@ class ComplaintReport {
     required this.id,
     required this.status,
     required this.images,
+    this.statusHistory = const <ComplaintStatusHistory>[],
     this.municipalityId,
     this.municipalityName,
     this.categoryId,
@@ -138,6 +173,9 @@ class ComplaintReport {
       status: ComplaintStatus.fromJson(statusValue),
       images: _mapList(json['images'])
           .map(ComplaintImage.fromJson)
+          .toList(growable: false),
+      statusHistory: _mapList(json['status_history'])
+          .map(ComplaintStatusHistory.fromJson)
           .toList(growable: false),
       municipalityId: _nullableInt(json['municipality_id']) ??
           _nullableInt(municipalityJson?['id']),
@@ -171,6 +209,7 @@ class ComplaintReport {
   final int id;
   final ComplaintStatus status;
   final List<ComplaintImage> images;
+  final List<ComplaintStatusHistory> statusHistory;
   final int? municipalityId;
   final String? municipalityName;
   final int? categoryId;
@@ -193,6 +232,41 @@ class ComplaintReport {
   final DateTime? updatedAt;
 
   bool get canEdit => serverCanEdit ?? status.isDraft;
+}
+
+class ComplaintReportsPage {
+  const ComplaintReportsPage({
+    required this.items,
+    required this.currentPage,
+    required this.lastPage,
+    required this.perPage,
+    required this.total,
+  });
+
+  factory ComplaintReportsPage.fromJson(Map<String, dynamic> json) {
+    final pagination = _nullableMap(json['pagination']);
+    if (pagination == null) {
+      throw const FormatException('Missing complaint pagination data.');
+    }
+
+    return ComplaintReportsPage(
+      items: _mapList(json['items'])
+          .map(ComplaintReport.fromJson)
+          .toList(growable: false),
+      currentPage: _requiredPositiveInt(pagination, 'current_page'),
+      lastPage: _requiredPositiveInt(pagination, 'last_page'),
+      perPage: _requiredPositiveInt(pagination, 'per_page'),
+      total: _requiredNonNegativeInt(pagination, 'total'),
+    );
+  }
+
+  final List<ComplaintReport> items;
+  final int currentPage;
+  final int lastPage;
+  final int perPage;
+  final int total;
+
+  bool get hasNextPage => currentPage < lastPage;
 }
 
 class ComplaintDraftInput {
@@ -312,6 +386,11 @@ String? _trimmed(String? value) {
   return normalized == null || normalized.isEmpty ? null : normalized;
 }
 
+ComplaintStatus? _nullableComplaintStatus(Object? value) {
+  if (value == null) return null;
+  return ComplaintStatus.fromJson(value);
+}
+
 String? _nullableString(Object? value) {
   if (value == null) return null;
   final normalized = value.toString().trim();
@@ -332,7 +411,7 @@ String _requiredStringFromKeys(
     final value = _nullableString(json[key]);
     if (value != null) return value;
   }
-  throw FormatException('Missing complaint image URL.');
+  throw const FormatException('Missing complaint image URL.');
 }
 
 int _requiredInt(Map<String, dynamic> json, String key) {
@@ -345,6 +424,20 @@ int? _nullableInt(Object? value) {
   if (value is int) return value;
   if (value is num) return value.toInt();
   return int.tryParse(value?.toString() ?? '');
+}
+
+int _requiredPositiveInt(Map<String, dynamic> json, String key) {
+  final value = _nullableInt(json[key]);
+  if (value != null && value > 0) return value;
+  throw FormatException('Missing or invalid positive "$key" in complaint payload.');
+}
+
+int _requiredNonNegativeInt(Map<String, dynamic> json, String key) {
+  final value = _nullableInt(json[key]);
+  if (value != null && value >= 0) return value;
+  throw FormatException(
+    'Missing or invalid non-negative "$key" in complaint payload.',
+  );
 }
 
 double? _nullableDouble(Object? value) {

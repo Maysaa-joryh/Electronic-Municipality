@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import 'package:electronic_municipality/l10n/localized_text.dart';
+import 'package:electronic_municipality/l10n/app_localizations.dart';
 
 import '../../../../app/design_system.dart';
 import '../../../../app/router.dart';
@@ -212,12 +214,14 @@ class _ContactField extends StatelessWidget {
           controller: controller,
           validator: (value) {
             if (value == null || value.trim().isEmpty) {
-              return 'البريد الإلكتروني مطلوب';
+              return context.tr('البريد الإلكتروني مطلوب');
             }
             final email = value.trim();
             final isValid =
                 RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email);
-            return isValid ? null : 'أدخل بريداً إلكترونياً صحيحاً';
+            return isValid
+                ? null
+                : context.tr('أدخل بريداً إلكترونياً صحيحاً');
           },
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.done,
@@ -225,9 +229,9 @@ class _ContactField extends StatelessWidget {
             AutofillHints.email,
           ],
           onFieldSubmitted: onSubmitted,
-          textDirection: TextDirection.rtl,
+          textDirection: TextDirection.ltr,
           decoration: InputDecoration(
-            hintText: 'أدخل هنا...',
+            hintText: context.tr('أدخل هنا...'),
             prefixIcon: const Icon(
               Icons.contact_mail_outlined,
               color: AppColors.gold,

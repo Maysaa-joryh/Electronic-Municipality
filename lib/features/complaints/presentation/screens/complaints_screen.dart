@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 import 'package:image_picker/image_picker.dart';
+
+import '../../../../l10n/localized_text.dart';
 
 import '../../../../app/router.dart';
 import '../../../../app/theme/app_colors.dart';
@@ -40,6 +42,8 @@ class ComplaintsScreen extends StatefulWidget {
 }
 
 class _ComplaintsScreenState extends State<ComplaintsScreen> {
+  static const int _reportsPerPage = 15;
+
   final _title = TextEditingController();
   final _description = TextEditingController();
   final _textLocation = TextEditingController();
@@ -53,12 +57,14 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
   CitizenVerificationStatus? _verificationStatus;
   List<ComplaintCategory> _categories = const [];
   List<ComplaintReport> _reports = const [];
+  ComplaintReportsPage? _reportsPage;
   List<ComplaintAttachment> _pendingImages = const [];
   ComplaintReport? _draft;
   int? _categoryGroupId;
   int? _categoryId;
   int _mode = 0;
   bool _loading = true;
+  bool _loadingMoreReports = false;
   bool _busy = false;
   String? _pageError;
   String? _formError;
@@ -109,9 +115,14 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
     }
 
     try {
-      final reports = await _repository.getReports();
+      final reportsPage = await _repository.getReportsPage(
+        perPage: _reportsPerPage,
+      );
       if (!mounted) return;
-      setState(() => _reports = reports);
+      setState(() {
+        _reports = reportsPage.items;
+        _reportsPage = reportsPage;
+      });
     } catch (error, stackTrace) {
       debugPrint('LOAD COMPLAINT REPORTS ERROR: $error');
       debugPrintStack(stackTrace: stackTrace);
@@ -146,15 +157,45 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
 
   Future<void> _refreshReports() async {
     try {
-      final reports = await _repository.getReports();
+      final reportsPage = await _repository.getReportsPage(
+        perPage: _reportsPerPage,
+      );
       if (mounted) {
         setState(() {
-          _reports = reports;
+          _reports = reportsPage.items;
+          _reportsPage = reportsPage;
           _pageError = null;
         });
       }
     } catch (error) {
       if (mounted) setState(() => _pageError = _messageFor(error));
+    }
+  }
+
+  Future<void> _loadMoreReports() async {
+    final currentPage = _reportsPage;
+    if (_loadingMoreReports || currentPage == null || !currentPage.hasNextPage) {
+      return;
+    }
+
+    setState(() => _loadingMoreReports = true);
+    try {
+      final nextPage = await _repository.getReportsPage(
+        page: currentPage.currentPage + 1,
+        perPage: _reportsPerPage,
+      );
+      if (!mounted) return;
+      setState(() {
+        _reports = List<ComplaintReport>.unmodifiable(
+          <ComplaintReport>[..._reports, ...nextPage.items],
+        );
+        _reportsPage = nextPage;
+        _pageError = null;
+      });
+    } catch (error) {
+      if (mounted) setState(() => _pageError = _messageFor(error));
+    } finally {
+      if (mounted) setState(() => _loadingMoreReports = false);
     }
   }
 
@@ -295,23 +336,32 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
         ? null
         : ComplaintLocation(latitude: latitude, longitude: longitude);
 
-    final selected = widget.locationSelector == null
-        ? await Navigator.of(context).push<ComplaintLocation>(
+    final locationSelector = widget.locationSelector;
+    final selectionFuture = locationSelector == null
+        ? Navigator.of(context).push<ComplaintLocation>(
             MaterialPageRoute<ComplaintLocation>(
               builder: (_) => ComplaintLocationPickerScreen(
                 initialLocation: initial,
               ),
             ),
           )
-        : await widget.locationSelector!(context, initial);
+        : locationSelector(context, initial);
+    final selected = await selectionFuture;
     if (selected == null || !mounted) return;
 
     final errors = Map<String, List<String>>.of(_fieldErrors)
       ..remove('latitude')
-      ..remove('longitude');
+      ..remove('longitude')
+      ..remove('text_location');
+    final placeDescription = selected.placeDescription?.trim();
     setState(() {
       _latitude.text = selected.latitude.toStringAsFixed(6);
       _longitude.text = selected.longitude.toStringAsFixed(6);
+      if (_textLocation.text.trim().isEmpty &&
+          placeDescription != null &&
+          placeDescription.isNotEmpty) {
+        _textLocation.text = placeDescription;
+      }
       _fieldErrors = Map.unmodifiable(errors);
       _formError = null;
     });
@@ -749,7 +799,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
                 child: Text('لا توجد شكاوى حتى الآن.',
                     style: TextStyle(color: AppColors.muted))),
           )
-        else
+        else ...[
           for (var index = 0; index < _reports.length; index++) ...[
             _ComplaintTile(
               report: _reports[index],
@@ -762,6 +812,32 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
             ),
             if (index != _reports.length - 1) const SizedBox(height: 10),
           ],
+          if ((_reportsPage?.total ?? 0) > _reports.length) ...[
+            const SizedBox(height: 14),
+            Text(
+              'تم عرض ${_reports.length} من ${_reportsPage!.total} شكوى.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
+            ),
+          ],
+          if (_reportsPage?.hasNextPage == true) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              key: const ValueKey('load_more_complaints'),
+              onPressed: _loadingMoreReports ? null : _loadMoreReports,
+              icon: _loadingMoreReports
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.expand_more_rounded),
+              label: Text(
+                _loadingMoreReports ? 'جارٍ تحميل المزيد...' : 'تحميل المزيد',
+              ),
+            ),
+          ],
+        ],
       ]),
     );
   }

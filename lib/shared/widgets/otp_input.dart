@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import 'package:electronic_municipality/l10n/localized_text.dart';
+import 'package:electronic_municipality/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/theme/app_colors.dart';
@@ -69,7 +71,9 @@ class _OtpInputState extends State<OtpInput> {
         final activeIndex = code.length.clamp(0, widget.length - 1);
 
         return Semantics(
-          label: 'رمز التحقق المكون من ${widget.length} أرقام',
+          label: context.tr(
+            'رمز التحقق المكون من ${widget.length} أرقام',
+          ),
           textField: true,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
@@ -108,6 +112,7 @@ class _OtpInputState extends State<OtpInput> {
                             ),
                             child: Text(
                               index < code.length ? code[index] : '',
+                              translate: false,
                               style: widget.textStyle ??
                                   const TextStyle(
                                     color: AppColors.text,

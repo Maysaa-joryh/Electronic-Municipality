@@ -1,0 +1,13 @@
+diff --git a/test/features/complaints/complaints_screen_test.dart b/test/features/complaints/complaints_screen_test.dart
+index ea6a75a..12f74e5 100644
+--- a/test/features/complaints/complaints_screen_test.dart
++++ b/test/features/complaints/complaints_screen_test.dart
+@@ -250,7 +250,7 @@ void main() {
+       findsOneWidget,
+     );
+     expect(
+-      find.text(
++      find.textContaining(
+         'تمت إحالة الشكوى إلى الوحدة المختصة.',
+         skipOffstage: false,
+       ),

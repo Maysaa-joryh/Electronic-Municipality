@@ -1,7 +1,9 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 import 'package:flutter_map/flutter_map.dart';
+
+import '../../../../l10n/localized_text.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../../app/theme/app_colors.dart';
@@ -175,8 +177,18 @@ class _ComplaintLocationPickerScreenState
       ComplaintLocation(
         latitude: point.latitude,
         longitude: point.longitude,
+        placeDescription: _placeDescription(_place),
       ),
     );
+  }
+
+  String? _placeDescription(ComplaintPlace? place) {
+    if (place == null) return null;
+    final parts = <String>[
+      place.title.trim(),
+      if (place.subtitle?.trim().isNotEmpty == true) place.subtitle!.trim(),
+    ];
+    return parts.join('، ');
   }
 
   @override

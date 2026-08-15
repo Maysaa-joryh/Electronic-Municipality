@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import 'package:electronic_municipality/l10n/localized_text.dart';
 
 import '../../app/theme/app_colors.dart';
 import '../../core/repositories/auth_repository.dart';
@@ -83,7 +84,7 @@ class CitizenVerificationNotice extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Align(
-            alignment: Alignment.centerRight,
+            alignment: AlignmentDirectional.centerStart,
             child: TextButton.icon(
               key: const ValueKey('citizen_verification_notice_action'),
               onPressed: onAction,

@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import 'package:electronic_municipality/l10n/localized_text.dart';
+import 'package:electronic_municipality/l10n/app_localizations.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../app/theme/app_colors.dart';
@@ -323,7 +325,7 @@ class _VerificationHeader extends StatelessWidget {
             ),
             const Spacer(),
             IconButton(
-              tooltip: 'رجوع',
+              tooltip: context.tr('رجوع'),
               onPressed: () => Navigator.of(context).maybePop(),
               icon: const Icon(Icons.arrow_back_rounded),
             ),
@@ -553,7 +555,7 @@ class _SelectedPhotoPreview extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             IconButton(
-              tooltip: 'حذف الصورة',
+              tooltip: context.tr('حذف الصورة'),
               onPressed: onRemove,
               color: AppColors.danger,
               icon: const Icon(Icons.delete_outline_rounded),

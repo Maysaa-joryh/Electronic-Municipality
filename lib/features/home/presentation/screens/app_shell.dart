@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import 'package:electronic_municipality/l10n/localized_text.dart';
+import 'package:electronic_municipality/l10n/app_localizations.dart';
 import '../../../../app/router.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../complaints/presentation/screens/complaints_screen.dart';
@@ -166,31 +168,31 @@ class _MunicipalityBottomNavigationBar extends StatelessWidget {
                 child: NavigationBar(
                   selectedIndex: selectedIndex,
                   onDestinationSelected: onDestinationSelected,
-                  destinations: const [
+                  destinations: [
                     NavigationDestination(
-                      icon: Icon(Icons.home_outlined),
-                      selectedIcon: Icon(Icons.home_rounded),
-                      label: 'الرئيسية',
+                      icon: const Icon(Icons.home_outlined),
+                      selectedIcon: const Icon(Icons.home_rounded),
+                      label: context.tr('الرئيسية'),
                     ),
                     NavigationDestination(
-                      icon: Icon(Icons.receipt_long_outlined),
-                      selectedIcon: Icon(Icons.receipt_long_rounded),
-                      label: 'المعاملات',
+                      icon: const Icon(Icons.receipt_long_outlined),
+                      selectedIcon: const Icon(Icons.receipt_long_rounded),
+                      label: context.tr('المعاملات'),
                     ),
                     NavigationDestination(
-                      icon: Icon(Icons.chat_bubble_outline_rounded),
-                      selectedIcon: Icon(Icons.chat_bubble_rounded),
-                      label: 'الشكاوى',
+                      icon: const Icon(Icons.chat_bubble_outline_rounded),
+                      selectedIcon: const Icon(Icons.chat_bubble_rounded),
+                      label: context.tr('الشكاوى'),
                     ),
                     NavigationDestination(
-                      icon: Icon(Icons.newspaper_outlined),
-                      selectedIcon: Icon(Icons.newspaper_rounded),
-                      label: 'الأخبار',
+                      icon: const Icon(Icons.newspaper_outlined),
+                      selectedIcon: const Icon(Icons.newspaper_rounded),
+                      label: context.tr('الأخبار'),
                     ),
                     NavigationDestination(
-                      icon: Icon(Icons.settings_outlined),
-                      selectedIcon: Icon(Icons.settings_rounded),
-                      label: 'الإعدادات',
+                      icon: const Icon(Icons.settings_outlined),
+                      selectedIcon: const Icon(Icons.settings_rounded),
+                      label: context.tr('الإعدادات'),
                     ),
                   ],
                 ),

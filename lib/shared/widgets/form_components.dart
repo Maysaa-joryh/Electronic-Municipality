@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import 'package:electronic_municipality/l10n/localized_text.dart';
+import 'package:electronic_municipality/l10n/app_localizations.dart';
 import '../../app/design_system.dart';
 import '../../app/theme/app_colors.dart';
 
@@ -258,6 +260,7 @@ class DocumentUploadArea extends StatelessWidget {
               const SizedBox(height: AppSpacing.md),
               Text(
                 uploadedFileName!,
+                translate: false,
                 style: const TextStyle(
                   fontSize: 12,
                   color: AppColors.success,
@@ -453,14 +456,17 @@ class _AppTextFieldState extends State<AppTextField> {
     return TextFormField(
       controller: widget.controller,
       focusNode: _focusNode,
-      validator: widget.validator,
+      validator: (value) {
+        final error = widget.validator?.call(value);
+        return error == null ? null : context.tr(error);
+      },
       onChanged: widget.onChanged,
       obscureText: widget.obscureText,
       maxLines: widget.obscureText ? 1 : widget.maxLines,
-      textDirection: TextDirection.rtl,
+      textDirection: Directionality.of(context),
       decoration: InputDecoration(
-        labelText: widget.label,
-        hintText: widget.hint,
+        labelText: context.tr(widget.label),
+        hintText: widget.hint == null ? null : context.tr(widget.hint!),
         prefixIcon: widget.prefixIcon != null ? Icon(widget.prefixIcon) : null,
         suffixIcon: widget.suffixIcon != null ? Icon(widget.suffixIcon) : null,
         border: OutlineInputBorder(
@@ -516,13 +522,16 @@ class _PasswordFieldState extends State<PasswordField> {
     return TextFormField(
       controller: widget.controller,
       focusNode: _focusNode,
-      validator: widget.validator,
+      validator: (value) {
+        final error = widget.validator?.call(value);
+        return error == null ? null : context.tr(error);
+      },
       onChanged: widget.onChanged,
       obscureText: _obscureText,
-      textDirection: TextDirection.rtl,
+      textDirection: Directionality.of(context),
       decoration: InputDecoration(
-        labelText: 'كلمة المرور',
-        hintText: 'أدخل كلمة المرور',
+        labelText: context.tr('كلمة المرور'),
+        hintText: context.tr('أدخل كلمة المرور'),
         prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary),
         suffixIcon: IconButton(
           icon: Icon(

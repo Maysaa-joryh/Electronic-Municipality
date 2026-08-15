@@ -21,6 +21,17 @@ class ComplaintsRepositoryApi implements ComplaintsRepository {
   }
 
   @override
+  Future<ComplaintReportsPage> getReportsPage({
+    int page = 1,
+    int perPage = 15,
+  }) {
+    return _remoteDataSource.getReportsPage(
+      page: page,
+      perPage: perPage,
+    );
+  }
+
+  @override
   Future<ComplaintReport> getReport(int reportId) {
     return _remoteDataSource.getReport(reportId);
   }

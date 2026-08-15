@@ -47,7 +47,7 @@ index f07d557..0cc9ab2 100644
 +  }
  }
 diff --git a/lib/features/complaints/data/models/complaint_models.dart b/lib/features/complaints/data/models/complaint_models.dart
-index 72dce5c..aa7d280 100644
+index 672bba9..aa7d280 100644
 --- a/lib/features/complaints/data/models/complaint_models.dart
 +++ b/lib/features/complaints/data/models/complaint_models.dart
 @@ -1,5 +1,6 @@
@@ -82,7 +82,7 @@ index 72dce5c..aa7d280 100644
  
    bool get isDraft => key.toLowerCase() == 'draft';
  }
-@@ -69,24 +76,32 @@ class ComplaintImage {
+@@ -69,29 +76,32 @@ class ComplaintImage {
      required this.id,
      required this.url,
      this.name,
@@ -95,7 +95,12 @@ index 72dce5c..aa7d280 100644
        id: _requiredInt(json, 'id'),
 -      url: _requiredStringFromKeys(
 -        json,
--        const <String>['url', 'view_url', 'image_url', 'path'],
+-        const <String>[
+-          'url',
+-          'view_url',
+-          'image_url',
+-          'path',
+-        ],
 +      url: ApiConfig.resolveServerUrl(
 +        _requiredStringFromKeys(
 +          json,
@@ -118,7 +123,7 @@ index 72dce5c..aa7d280 100644
  }
  
  class ComplaintReport {
-@@ -95,14 +110,20 @@ class ComplaintReport {
+@@ -100,14 +110,20 @@ class ComplaintReport {
      required this.status,
      required this.images,
      this.municipalityId,
@@ -139,15 +144,19 @@ index 72dce5c..aa7d280 100644
      this.createdAt,
      this.updatedAt,
    });
-@@ -120,6 +141,7 @@ class ComplaintReport {
+@@ -125,8 +141,9 @@ class ComplaintReport {
            .toList(growable: false),
        municipalityId: _nullableInt(json['municipality_id']) ??
            _nullableInt(municipalityJson?['id']),
+-      categoryId: _nullableInt(json['category_id']) ??
+-          _nullableInt(categoryJson?['id']),
 +      municipalityName: _nullableString(municipalityJson?['name']),
-       categoryId:
-           _nullableInt(json['category_id']) ?? _nullableInt(categoryJson?['id']),
++      categoryId:
++          _nullableInt(json['category_id']) ?? _nullableInt(categoryJson?['id']),
        category: categoryJson == null
-@@ -131,11 +153,16 @@ class ComplaintReport {
+           ? null
+           : ComplaintCategory(
+@@ -136,11 +153,16 @@ class ComplaintReport {
                key: _nullableString(categoryJson['key']),
              ),
        title: _nullableString(json['title']),
@@ -164,7 +173,7 @@ index 72dce5c..aa7d280 100644
        createdAt: _nullableDateTime(json['created_at']),
        updatedAt: _nullableDateTime(json['updated_at']),
      );
-@@ -145,8 +172,10 @@ class ComplaintReport {
+@@ -150,8 +172,10 @@ class ComplaintReport {
    final ComplaintStatus status;
    final List<ComplaintImage> images;
    final int? municipalityId;
@@ -175,7 +184,7 @@ index 72dce5c..aa7d280 100644
    final String? title;
    final String? description;
    final String? textLocation;
-@@ -156,6 +185,10 @@ class ComplaintReport {
+@@ -161,6 +185,10 @@ class ComplaintReport {
    /// If the backend sends `can_edit`, it is the authority. The draft status is
    /// used only as a compatibility fallback when that field is absent.
    final bool? serverCanEdit;
@@ -186,7 +195,7 @@ index 72dce5c..aa7d280 100644
    final DateTime? createdAt;
    final DateTime? updatedAt;
  
-diff --git a/complaint_details_work_20260814/lib/features/complaints/presentation/screens/complaint_details_screen.dart b/lib/features/complaints/presentation/screens/complaint_details_screen.dart
+diff --git a/github_36b18a9_exact_work/lib/features/complaints/presentation/screens/complaint_details_screen.dart b/lib/features/complaints/presentation/screens/complaint_details_screen.dart
 new file mode 100644
 index 0000000..7c2182d
 --- /dev/null
@@ -947,7 +956,7 @@ index 0000000..7c2182d
 +    ? error.message
 +    : 'تعذر تحميل أحدث تفاصيل الشكوى. اسحب للأسفل للمحاولة مجددًا.';
 diff --git a/lib/features/complaints/presentation/screens/complaints_screen.dart b/lib/features/complaints/presentation/screens/complaints_screen.dart
-index ddc3c5f..5fad2e1 100644
+index dcf61e3..5fad2e1 100644
 --- a/lib/features/complaints/presentation/screens/complaints_screen.dart
 +++ b/lib/features/complaints/presentation/screens/complaints_screen.dart
 @@ -10,6 +10,7 @@ import '../../../../shared/widgets/citizen_verification_notice.dart';
@@ -977,7 +986,41 @@ index ddc3c5f..5fad2e1 100644
    Future<void> _deleteDraft(ComplaintReport report) async {
      final confirmed = await showDialog<bool>(
        context: context,
-@@ -740,6 +753,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+@@ -568,8 +581,9 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+               .map((item) =>
+                   DropdownMenuItem(value: item.id, child: Text(item.name)))
+               .toList(),
+-          onChanged:
+-              canEdit && !_busy && !_loading ? _selectCategoryGroup : null,
++          onChanged: canEdit && !_busy && !_loading
++              ? _selectCategoryGroup
++              : null,
+         ),
+         const SizedBox(height: 12),
+         DropdownButtonFormField<int>(
+@@ -580,14 +594,19 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+           isExpanded: true,
+           decoration: _decoration(
+             'نوع الشكوى',
+-            _categoryGroupId == null ? 'اختر المجال أولًا' : 'اختر نوع المشكلة',
++            _categoryGroupId == null
++                ? 'اختر المجال أولًا'
++                : 'اختر نوع المشكلة',
+             _errorFor('category_id'),
+           ),
+           items: _selectedCategoryTypes
+               .map((item) =>
+                   DropdownMenuItem(value: item.id, child: Text(item.name)))
+               .toList(),
+-          onChanged: canEdit && !_busy && !_loading && _categoryGroupId != null
++          onChanged: canEdit &&
++                  !_busy &&
++                  !_loading &&
++                  _categoryGroupId != null
+               ? _selectCategory
+               : null,
+         ),
+@@ -734,6 +753,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
            for (var index = 0; index < _reports.length; index++) ...[
              _ComplaintTile(
                report: _reports[index],
@@ -985,7 +1028,7 @@ index ddc3c5f..5fad2e1 100644
                onEdit:
                    _reports[index].canEdit ? () => _edit(_reports[index]) : null,
                onDelete: _reports[index].canEdit
-@@ -754,55 +768,102 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+@@ -748,55 +768,102 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
  }
  
  class _ComplaintTile extends StatelessWidget {
@@ -1131,6 +1174,18 @@ index ddc3c5f..5fad2e1 100644
      );
    }
  }
+@@ -864,8 +931,9 @@ class _LocationField extends StatelessWidget {
+                           ? 'تم تحديد الموقع بنجاح'
+                           : 'اضغط لاختيار الموقع الدقيق',
+                       style: TextStyle(
+-                        color:
+-                            hasLocation ? AppColors.success : AppColors.muted,
++                        color: hasLocation
++                            ? AppColors.success
++                            : AppColors.muted,
+                         fontSize: 12.5,
+                       ),
+                     ),
 diff --git a/test/features/complaints/complaint_contract_test.dart b/test/features/complaints/complaint_contract_test.dart
 index 10d4f54..2a242f2 100644
 --- a/test/features/complaints/complaint_contract_test.dart

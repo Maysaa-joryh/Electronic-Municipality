@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:electronic_municipality/core/config/api_config.dart';
 import 'package:electronic_municipality/core/network/api_exception.dart';
 import 'package:electronic_municipality/features/complaints/data/complaint_endpoints.dart';
 import 'package:electronic_municipality/features/complaints/data/models/complaint_models.dart';
@@ -125,6 +126,86 @@ void main() {
       report.images.single.url,
       'http://server/storage/evidence.jpg',
     );
+  });
+
+  test('report model matches the complete citizen complaints response item', () {
+    final report = ComplaintReport.fromJson(
+      <String, dynamic>{
+        'id': 34,
+        'complaint_id': null,
+        'title': 'عمود إنارة',
+        'description': 'العمود متضرر ويحتاج إلى صيانة',
+        'text_location': 'قرب الحديقة العامة',
+        'latitude': '33.4728700',
+        'longitude': '36.2497910',
+        'municipality': <String, dynamic>{
+          'id': 1,
+          'name': 'بلدية كفرسوسة',
+        },
+        'category': <String, dynamic>{
+          'id': 13,
+          'name': 'عمود إنارة متضرر',
+          'parent_id': 11,
+        },
+        'status': <String, dynamic>{
+          'id': 2,
+          'key': 'submitted',
+          'name': 'تم الإرسال',
+          'is_terminal': false,
+        },
+        'images': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 5,
+            'original_name': 'scaled_125865.jpg',
+            'mime_type': 'image/jpeg',
+            'file_size': 149020,
+            'view_url':
+                'http://localhost/storage/complaint-reports/34/image.jpg',
+          },
+        ],
+        'reporters_count': null,
+        'is_linked': false,
+        'can_edit': false,
+        'submitted_at': '2026-08-14T15:45:23.000000Z',
+        'linked_at': null,
+        'created_at': '2026-08-14T15:45:21.000000Z',
+        'updated_at': '2026-08-14T15:45:23.000000Z',
+      },
+    );
+
+    expect(report.id, 34);
+    expect(report.municipalityId, 1);
+    expect(report.municipalityName, 'بلدية كفرسوسة');
+    expect(report.categoryId, 13);
+    expect(report.category?.parentId, 11);
+    expect(report.status.id, 2);
+    expect(report.status.label, 'تم الإرسال');
+    expect(report.status.isTerminal, isFalse);
+    expect(report.canEdit, isFalse);
+    expect(report.isLinked, isFalse);
+    expect(report.submittedAt, DateTime.parse('2026-08-14T15:45:23Z'));
+    expect(report.images.single.name, 'scaled_125865.jpg');
+    expect(report.images.single.mimeType, 'image/jpeg');
+    expect(report.images.single.fileSize, 149020);
+
+    final imageUri = Uri.parse(report.images.single.url);
+    final apiUri = Uri.parse(ApiConfig.normalizedBaseUrl);
+    expect(imageUri.host, apiUri.host);
+    expect(imageUri.port, apiUri.port);
+    expect(imageUri.path, '/storage/complaint-reports/34/image.jpg');
+  });
+
+  test('server URL resolver accepts markdown-wrapped image URLs', () {
+    final url = ApiConfig.resolveServerUrl(
+      '[http://localhost/storage/image.jpg]'
+      '(http://localhost/storage/image.jpg)',
+    );
+    final resolved = Uri.parse(url);
+    final api = Uri.parse(ApiConfig.normalizedBaseUrl);
+
+    expect(resolved.host, api.host);
+    expect(resolved.port, api.port);
+    expect(resolved.path, '/storage/image.jpg');
   });
 
   test('draft status is fallback when can_edit is absent', () {

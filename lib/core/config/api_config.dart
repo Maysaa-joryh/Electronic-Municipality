@@ -57,4 +57,43 @@ class ApiConfig {
         .replace(path: normalizedPath, query: null, fragment: null)
         .toString();
   }
+
+  /// Resolves backend-generated asset URLs against the configured API host.
+  ///
+  /// Laravel commonly emits `http://localhost/storage/...` in development.
+  /// On a physical phone, `localhost` points to the phone itself, so local
+  /// hosts are replaced with the host and port from [baseUrl].
+  static String resolveServerUrl(String value) {
+    var normalized = value.trim();
+    final markdownLink = RegExp(r'^\[[^\]]+\]\(([^)]+)\)$')
+        .firstMatch(normalized);
+    if (markdownLink != null) {
+      normalized = markdownLink.group(1)!.trim();
+    }
+
+    final origin = Uri.parse(normalizedBaseUrl).replace(
+      path: '/',
+      query: null,
+      fragment: null,
+    );
+    final uri = Uri.tryParse(normalized);
+    if (uri == null) return normalized;
+
+    if (!uri.hasScheme || uri.host.isEmpty) {
+      return origin.resolveUri(uri).toString();
+    }
+
+    const localHosts = <String>{'localhost', '127.0.0.1', '10.0.2.2'};
+    if (localHosts.contains(uri.host.toLowerCase())) {
+      return origin
+          .replace(
+            path: uri.path,
+            query: uri.hasQuery ? uri.query : null,
+            fragment: uri.hasFragment ? uri.fragment : null,
+          )
+          .toString();
+    }
+
+    return uri.toString();
+  }
 }

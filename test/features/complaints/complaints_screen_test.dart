@@ -171,6 +171,65 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('opens complaint details and displays its attached images', (
+    WidgetTester tester,
+  ) async {
+    final repository = _ComplaintsHistoryRepositoryFake();
+    const verifiedCitizen = AuthUser(
+      id: 9,
+      fullName: 'مواطن موثق',
+      email: 'verified@example.sy',
+      phoneNumber: '0990000000',
+      roles: <String>['citizen'],
+      accountType: 'citizen',
+      citizenProfile: <String, dynamic>{
+        'is_verified': true,
+        'municipality_id': 1,
+      },
+    );
+    await tester.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ComplaintsScreen(
+            repository: repository,
+            authRepository: AuthRepositoryFake(
+              currentUser: verifiedCitizen,
+            ),
+            municipalityId: 1,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('سجل الشكاوى'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('open_complaint_34')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('open_complaint_34')));
+    await tester.pumpAndSettle();
+
+    expect(repository.getReportCalls, 1);
+    expect(
+      find.byKey(const ValueKey('complaint_details_screen')),
+      findsOneWidget,
+    );
+    expect(find.text('تفاصيل الشكوى'), findsOneWidget);
+    expect(find.text('عمود إنارة متضرر'), findsWidgets);
+    expect(find.text('بلدية كفرسوسة'), findsOneWidget);
+    expect(find.text('scaled_125865.jpg'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('complaint_image_5')),
+      findsOneWidget,
+    );
+  });
 }
 
 class _ComplaintsRepositoryFake implements ComplaintsRepository {
@@ -293,5 +352,101 @@ class _ComplaintsRepositoryFake implements ComplaintsRepository {
     required int imageId,
   }) async {
     mutations.add('delete-image:${report.id}:$imageId');
+  }
+}
+
+class _ComplaintsHistoryRepositoryFake implements ComplaintsRepository {
+  int getReportCalls = 0;
+
+  static final ComplaintReport report = ComplaintReport(
+    id: 34,
+    status: const ComplaintStatus(
+      id: 2,
+      key: 'submitted',
+      label: 'تم الإرسال',
+      isTerminal: false,
+    ),
+    images: const <ComplaintImage>[
+      ComplaintImage(
+        id: 5,
+        url: 'https://example.invalid/complaint-image.jpg',
+        name: 'scaled_125865.jpg',
+        mimeType: 'image/jpeg',
+        fileSize: 149020,
+      ),
+    ],
+    municipalityId: 1,
+    municipalityName: 'بلدية كفرسوسة',
+    categoryId: 13,
+    category: const ComplaintCategory(
+      id: 13,
+      parentId: 11,
+      name: 'عمود إنارة متضرر',
+    ),
+    title: 'بلاغ عمود إنارة',
+    description: 'العمود متضرر ويحتاج إلى صيانة.',
+    textLocation: 'قرب الحديقة العامة',
+    latitude: 33.47287,
+    longitude: 36.249791,
+    serverCanEdit: false,
+    isLinked: false,
+    submittedAt: DateTime.utc(2026, 8, 14, 15, 45, 23),
+    createdAt: DateTime.utc(2026, 8, 14, 15, 45, 21),
+    updatedAt: DateTime.utc(2026, 8, 14, 15, 45, 23),
+  );
+
+  @override
+  Future<List<ComplaintCategory>> getCategories() async {
+    return const <ComplaintCategory>[];
+  }
+
+  @override
+  Future<List<ComplaintReport>> getReports() async {
+    return <ComplaintReport>[report];
+  }
+
+  @override
+  Future<ComplaintReport> getReport(int reportId) async {
+    getReportCalls++;
+    return report;
+  }
+
+  @override
+  Future<ComplaintReport> createDraft(ComplaintDraftInput input) {
+    throw UnsupportedError('Not used by this test.');
+  }
+
+  @override
+  Future<ComplaintReport> updateDraft({
+    required ComplaintReport report,
+    required ComplaintDraftInput input,
+  }) {
+    throw UnsupportedError('Not used by this test.');
+  }
+
+  @override
+  Future<void> uploadImages({
+    required ComplaintReport report,
+    required List<ComplaintAttachment> images,
+  }) {
+    throw UnsupportedError('Not used by this test.');
+  }
+
+  @override
+  Future<void> deleteImage({
+    required ComplaintReport report,
+    required int imageId,
+  }) {
+    throw UnsupportedError('Not used by this test.');
+  }
+
+  @override
+  Future<void> deleteDraft(ComplaintReport report) {
+    throw UnsupportedError('Not used by this test.');
+  }
+
+  @override
+  Future<ComplaintReport> submitDraft(ComplaintReport report) {
+    throw UnsupportedError('Not used by this test.');
   }
 }

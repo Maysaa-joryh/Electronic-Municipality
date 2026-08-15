@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import '../../../../core/config/api_config.dart';
 import '../../../../core/network/api_exception.dart';
 
 class ComplaintCategory {
@@ -36,6 +37,8 @@ class ComplaintStatus {
   const ComplaintStatus({
     required this.key,
     required this.label,
+    this.id,
+    this.isTerminal,
   });
 
   factory ComplaintStatus.fromJson(Object? value) {
@@ -55,11 +58,15 @@ class ComplaintStatus {
       label: _nullableString(json['label']) ??
           _nullableString(json['name']) ??
           key,
+      id: _nullableInt(json['id']),
+      isTerminal: _nullableBool(json['is_terminal']),
     );
   }
 
   final String key;
   final String label;
+  final int? id;
+  final bool? isTerminal;
 
   bool get isDraft => key.toLowerCase() == 'draft';
 }
@@ -69,29 +76,32 @@ class ComplaintImage {
     required this.id,
     required this.url,
     this.name,
+    this.mimeType,
+    this.fileSize,
   });
 
   factory ComplaintImage.fromJson(Map<String, dynamic> json) {
     return ComplaintImage(
       id: _requiredInt(json, 'id'),
-      url: _requiredStringFromKeys(
-        json,
-        const <String>[
-          'url',
-          'view_url',
-          'image_url',
-          'path',
-        ],
+      url: ApiConfig.resolveServerUrl(
+        _requiredStringFromKeys(
+          json,
+          const <String>['url', 'view_url', 'image_url', 'path'],
+        ),
       ),
       name: _nullableString(json['name']) ??
           _nullableString(json['file_name']) ??
           _nullableString(json['original_name']),
+      mimeType: _nullableString(json['mime_type']),
+      fileSize: _nullableInt(json['file_size']),
     );
   }
 
   final int id;
   final String url;
   final String? name;
+  final String? mimeType;
+  final int? fileSize;
 }
 
 class ComplaintReport {
@@ -100,14 +110,20 @@ class ComplaintReport {
     required this.status,
     required this.images,
     this.municipalityId,
+    this.municipalityName,
     this.categoryId,
     this.category,
+    this.complaintId,
     this.title,
     this.description,
     this.textLocation,
     this.latitude,
     this.longitude,
     this.serverCanEdit,
+    this.reportersCount,
+    this.isLinked,
+    this.submittedAt,
+    this.linkedAt,
     this.createdAt,
     this.updatedAt,
   });
@@ -125,8 +141,9 @@ class ComplaintReport {
           .toList(growable: false),
       municipalityId: _nullableInt(json['municipality_id']) ??
           _nullableInt(municipalityJson?['id']),
-      categoryId: _nullableInt(json['category_id']) ??
-          _nullableInt(categoryJson?['id']),
+      municipalityName: _nullableString(municipalityJson?['name']),
+      categoryId:
+          _nullableInt(json['category_id']) ?? _nullableInt(categoryJson?['id']),
       category: categoryJson == null
           ? null
           : ComplaintCategory(
@@ -136,11 +153,16 @@ class ComplaintReport {
               key: _nullableString(categoryJson['key']),
             ),
       title: _nullableString(json['title']),
+      complaintId: _nullableInt(json['complaint_id']),
       description: _nullableString(json['description']),
       textLocation: _nullableString(json['text_location']),
       latitude: _nullableDouble(json['latitude']),
       longitude: _nullableDouble(json['longitude']),
       serverCanEdit: _nullableBool(json['can_edit']),
+      reportersCount: _nullableInt(json['reporters_count']),
+      isLinked: _nullableBool(json['is_linked']),
+      submittedAt: _nullableDateTime(json['submitted_at']),
+      linkedAt: _nullableDateTime(json['linked_at']),
       createdAt: _nullableDateTime(json['created_at']),
       updatedAt: _nullableDateTime(json['updated_at']),
     );
@@ -150,8 +172,10 @@ class ComplaintReport {
   final ComplaintStatus status;
   final List<ComplaintImage> images;
   final int? municipalityId;
+  final String? municipalityName;
   final int? categoryId;
   final ComplaintCategory? category;
+  final int? complaintId;
   final String? title;
   final String? description;
   final String? textLocation;
@@ -161,6 +185,10 @@ class ComplaintReport {
   /// If the backend sends `can_edit`, it is the authority. The draft status is
   /// used only as a compatibility fallback when that field is absent.
   final bool? serverCanEdit;
+  final int? reportersCount;
+  final bool? isLinked;
+  final DateTime? submittedAt;
+  final DateTime? linkedAt;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 

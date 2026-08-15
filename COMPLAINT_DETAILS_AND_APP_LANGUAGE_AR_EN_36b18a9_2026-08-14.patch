@@ -1,0 +1,3996 @@
+diff --git a/lib/app/app.dart b/lib/app/app.dart
+index 18fdb52..899de02 100644
+--- a/lib/app/app.dart
++++ b/lib/app/app.dart
+@@ -1,56 +1,93 @@
+ import 'package:flutter/material.dart';
++import 'package:flutter_localizations/flutter_localizations.dart';
++
+ import '../features/authentication/presentation/screens/auth_screens.dart';
+ import '../features/authentication/presentation/screens/change_temporary_password_screen.dart';
+ import '../features/home/presentation/screens/app_shell.dart';
+ import '../features/profile/presentation/screens/profile_screen.dart';
++import '../l10n/app_locale_controller.dart';
++import '../l10n/app_localizations.dart';
+ import 'router.dart';
+ import 'theme/app_theme.dart';
+ 
+-class AppRoot extends StatelessWidget {
+-  const AppRoot({super.key});
++class AppRoot extends StatefulWidget {
++  const AppRoot({super.key, this.localeController});
++
++  final AppLocaleController? localeController;
++
++  @override
++  State<AppRoot> createState() => _AppRootState();
++}
++
++class _AppRootState extends State<AppRoot> {
++  late final AppLocaleController _localeController =
++      widget.localeController ?? AppLocaleController();
++  late final bool _ownsController = widget.localeController == null;
++
++  @override
++  void dispose() {
++    if (_ownsController) _localeController.dispose();
++    super.dispose();
++  }
+ 
+   @override
+   Widget build(BuildContext context) {
+-    return MaterialApp(
+-      debugShowCheckedModeBanner: false,
+-      title: 'E-Municipality',
+-      theme: buildAppTheme(),
+-      builder: (context, child) {
+-        return Directionality(
+-          textDirection: TextDirection.rtl,
+-          child: child ?? const SizedBox.shrink(),
+-        );
+-      },
+-      initialRoute: AppRoutes.splash,
+-      onGenerateRoute: (settings) {
+-        final routeName = settings.name;
+-
+-        if (routeName == AppRoutes.shell) {
+-          final initialIndex =
+-              settings.arguments is int ? settings.arguments as int : 0;
+-          return MaterialPageRoute<void>(
+-            builder: (_) => AppShell(initialIndex: initialIndex),
+-          );
+-        }
+-
+-        final Widget page = switch (routeName) {
+-          AppRoutes.login => const AuthLoginScreen(),
+-          AppRoutes.signup => const AuthSignupScreen(),
+-          AppRoutes.forgot => const AuthForgotPasswordScreen(),
+-          AppRoutes.otp => AuthOtpScreen.fromRouteArguments(settings.arguments),
+-          AppRoutes.reset => AuthResetPasswordScreen(
+-              contact: settings.arguments is String
+-                  ? settings.arguments as String
+-                  : '',
+-            ),
+-          AppRoutes.changeTemporaryPassword =>
+-            const ChangeTemporaryPasswordScreen(),
+-          AppRoutes.profile => const ProfileScreen(),
+-          _ => const AppSplashScreen(),
+-        };
+-
+-        return MaterialPageRoute<void>(builder: (_) => page);
+-      },
++    return AnimatedBuilder(
++      animation: _localeController,
++      builder: (context, _) => AppLocaleScope(
++        controller: _localeController,
++        child: MaterialApp(
++          debugShowCheckedModeBanner: false,
++          onGenerateTitle: (context) => context.tr('بلديتنا الإلكترونية'),
++          theme: buildAppTheme(),
++          locale: _localeController.locale,
++          supportedLocales: AppLocaleController.supportedLocales,
++          localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
++            AppLocalizations.delegate,
++            GlobalMaterialLocalizations.delegate,
++            GlobalCupertinoLocalizations.delegate,
++            GlobalWidgetsLocalizations.delegate,
++          ],
++          localeResolutionCallback: (deviceLocale, supportedLocales) {
++            final requestedLanguage = deviceLocale?.languageCode;
++            for (final locale in supportedLocales) {
++              if (locale.languageCode == requestedLanguage) return locale;
++            }
++            return AppLocaleController.arabicLocale;
++          },
++          initialRoute: AppRoutes.splash,
++          onGenerateRoute: (settings) {
++            final routeName = settings.name;
++
++            if (routeName == AppRoutes.shell) {
++              final initialIndex =
++                  settings.arguments is int ? settings.arguments as int : 0;
++              return MaterialPageRoute<void>(
++                builder: (_) => AppShell(initialIndex: initialIndex),
++              );
++            }
++
++            final Widget page = switch (routeName) {
++              AppRoutes.login => const AuthLoginScreen(),
++              AppRoutes.signup => const AuthSignupScreen(),
++              AppRoutes.forgot => const AuthForgotPasswordScreen(),
++              AppRoutes.otp =>
++                AuthOtpScreen.fromRouteArguments(settings.arguments),
++              AppRoutes.reset => AuthResetPasswordScreen(
++                  contact: settings.arguments is String
++                      ? settings.arguments as String
++                      : '',
++                ),
++              AppRoutes.changeTemporaryPassword =>
++                const ChangeTemporaryPasswordScreen(),
++              AppRoutes.profile => const ProfileScreen(),
++              _ => const AppSplashScreen(),
++            };
++
++            return MaterialPageRoute<void>(builder: (_) => page);
++          },
++        ),
++      ),
+     );
+   }
+ }
+diff --git a/lib/core/config/api_config.dart b/lib/core/config/api_config.dart
+index f07d557..0cc9ab2 100644
+--- a/lib/core/config/api_config.dart
++++ b/lib/core/config/api_config.dart
+@@ -57,4 +57,43 @@ class ApiConfig {
+         .replace(path: normalizedPath, query: null, fragment: null)
+         .toString();
+   }
++
++  /// Resolves backend-generated asset URLs against the configured API host.
++  ///
++  /// Laravel commonly emits `http://localhost/storage/...` in development.
++  /// On a physical phone, `localhost` points to the phone itself, so local
++  /// hosts are replaced with the host and port from [baseUrl].
++  static String resolveServerUrl(String value) {
++    var normalized = value.trim();
++    final markdownLink = RegExp(r'^\[[^\]]+\]\(([^)]+)\)$')
++        .firstMatch(normalized);
++    if (markdownLink != null) {
++      normalized = markdownLink.group(1)!.trim();
++    }
++
++    final origin = Uri.parse(normalizedBaseUrl).replace(
++      path: '/',
++      query: null,
++      fragment: null,
++    );
++    final uri = Uri.tryParse(normalized);
++    if (uri == null) return normalized;
++
++    if (!uri.hasScheme || uri.host.isEmpty) {
++      return origin.resolveUri(uri).toString();
++    }
++
++    const localHosts = <String>{'localhost', '127.0.0.1', '10.0.2.2'};
++    if (localHosts.contains(uri.host.toLowerCase())) {
++      return origin
++          .replace(
++            path: uri.path,
++            query: uri.hasQuery ? uri.query : null,
++            fragment: uri.hasFragment ? uri.fragment : null,
++          )
++          .toString();
++    }
++
++    return uri.toString();
++  }
+ }
+diff --git a/lib/features/authentication/presentation/auth_widgets.dart b/lib/features/authentication/presentation/auth_widgets.dart
+index 38e7412..3d8dbb3 100644
+--- a/lib/features/authentication/presentation/auth_widgets.dart
++++ b/lib/features/authentication/presentation/auth_widgets.dart
+@@ -1,4 +1,5 @@
+-import 'package:flutter/material.dart';
++import 'package:flutter/material.dart' hide Text;
++import 'package:electronic_municipality/l10n/localized_text.dart';
+ import 'package:electronic_municipality/app/router.dart';
+ import 'package:electronic_municipality/app/theme/app_colors.dart';
+ import 'package:electronic_municipality/core/di.dart';
+diff --git a/lib/features/authentication/presentation/screens/app_splash_screen.dart b/lib/features/authentication/presentation/screens/app_splash_screen.dart
+index 3e03d46..a0aacd6 100644
+--- a/lib/features/authentication/presentation/screens/app_splash_screen.dart
++++ b/lib/features/authentication/presentation/screens/app_splash_screen.dart
+@@ -1,4 +1,6 @@
+-import 'package:flutter/material.dart';
++import 'package:flutter/material.dart' hide Text;
++import 'package:electronic_municipality/l10n/localized_text.dart';
++import 'package:electronic_municipality/l10n/app_localizations.dart';
+ 
+ import '../../../../app/design_system.dart';
+ import '../../../../app/router.dart';
+@@ -143,7 +145,7 @@ class _SplashProgressBar extends StatelessWidget {
+   @override
+   Widget build(BuildContext context) {
+     return Semantics(
+-      label: 'جارٍ تحميل بوابة المواطن الرقمية',
++      label: context.tr('جارٍ تحميل بوابة المواطن الرقمية'),
+       child: AnimatedBuilder(
+         animation: animation,
+         builder: (context, child) {
+@@ -158,7 +160,7 @@ class _SplashProgressBar extends StatelessWidget {
+               borderRadius: BorderRadius.circular(2),
+             ),
+             child: Align(
+-              alignment: Alignment.centerRight,
++              alignment: AlignmentDirectional.centerStart,
+               child: Container(
+                 width: width * progress,
+                 height: 4,
+diff --git a/lib/features/authentication/presentation/screens/change_temporary_password_screen.dart b/lib/features/authentication/presentation/screens/change_temporary_password_screen.dart
+index b52d277..6f7bb6f 100644
+--- a/lib/features/authentication/presentation/screens/change_temporary_password_screen.dart
++++ b/lib/features/authentication/presentation/screens/change_temporary_password_screen.dart
+@@ -1,4 +1,6 @@
+-import 'package:flutter/material.dart';
++import 'package:flutter/material.dart' hide Text;
++import 'package:electronic_municipality/l10n/localized_text.dart';
++import 'package:electronic_municipality/l10n/app_localizations.dart';
+ 
+ import '../../../../app/design_system.dart';
+ import '../../../../app/router.dart';
+@@ -127,7 +129,7 @@ class _ChangeTemporaryPasswordScreenState
+                 obscureText: _obscureCurrent,
+                 textInputAction: TextInputAction.next,
+                 decoration: InputDecoration(
+-                  labelText: 'كلمة المرور المؤقتة',
++                  labelText: context.tr('كلمة المرور المؤقتة'),
+                   prefixIcon: const Icon(Icons.lock_clock_outlined),
+                   suffixIcon: IconButton(
+                     onPressed: () {
+@@ -141,7 +143,7 @@ class _ChangeTemporaryPasswordScreenState
+                   ),
+                 ),
+                 validator: (value) => value == null || value.isEmpty
+-                    ? 'كلمة المرور المؤقتة مطلوبة'
++                    ? context.tr('كلمة المرور المؤقتة مطلوبة')
+                     : null,
+               ),
+               const SizedBox(height: AppSpacing.lg),
+@@ -151,7 +153,7 @@ class _ChangeTemporaryPasswordScreenState
+                 obscureText: _obscureNew,
+                 textInputAction: TextInputAction.next,
+                 decoration: InputDecoration(
+-                  labelText: 'كلمة المرور الجديدة',
++                  labelText: context.tr('كلمة المرور الجديدة'),
+                   prefixIcon: const Icon(Icons.lock_reset_outlined),
+                   suffixIcon: IconButton(
+                     onPressed: () => setState(() => _obscureNew = !_obscureNew),
+@@ -164,13 +166,13 @@ class _ChangeTemporaryPasswordScreenState
+                 ),
+                 validator: (value) {
+                   if (value == null || value.isEmpty) {
+-                    return 'كلمة المرور الجديدة مطلوبة';
++                    return context.tr('كلمة المرور الجديدة مطلوبة');
+                   }
+                   if (value.length < 8) {
+-                    return 'يجب ألا تقل كلمة المرور عن 8 محارف';
++                    return context.tr('يجب ألا تقل كلمة المرور عن 8 محارف');
+                   }
+                   if (value == _currentPasswordController.text) {
+-                    return 'يجب أن تختلف عن كلمة المرور المؤقتة';
++                    return context.tr('يجب أن تختلف عن كلمة المرور المؤقتة');
+                   }
+                   return null;
+                 },
+@@ -184,12 +186,12 @@ class _ChangeTemporaryPasswordScreenState
+                 onFieldSubmitted: (_) {
+                   if (!_isLoading) _submit();
+                 },
+-                decoration: const InputDecoration(
+-                  labelText: 'تأكيد كلمة المرور الجديدة',
+-                  prefixIcon: Icon(Icons.verified_user_outlined),
++                decoration: InputDecoration(
++                  labelText: context.tr('تأكيد كلمة المرور الجديدة'),
++                  prefixIcon: const Icon(Icons.verified_user_outlined),
+                 ),
+                 validator: (value) => value != _newPasswordController.text
+-                    ? 'كلمات المرور غير متطابقة'
++                    ? context.tr('كلمات المرور غير متطابقة')
+                     : null,
+               ),
+               const SizedBox(height: AppSpacing.xxl),
+diff --git a/lib/features/authentication/presentation/screens/forgot_password_screen.dart b/lib/features/authentication/presentation/screens/forgot_password_screen.dart
+index cdf8b40..da472e8 100644
+--- a/lib/features/authentication/presentation/screens/forgot_password_screen.dart
++++ b/lib/features/authentication/presentation/screens/forgot_password_screen.dart
+@@ -1,4 +1,6 @@
+-import 'package:flutter/material.dart';
++import 'package:flutter/material.dart' hide Text;
++import 'package:electronic_municipality/l10n/localized_text.dart';
++import 'package:electronic_municipality/l10n/app_localizations.dart';
+ 
+ import '../../../../app/design_system.dart';
+ import '../../../../app/router.dart';
+@@ -212,12 +214,14 @@ class _ContactField extends StatelessWidget {
+           controller: controller,
+           validator: (value) {
+             if (value == null || value.trim().isEmpty) {
+-              return 'البريد الإلكتروني مطلوب';
++              return context.tr('البريد الإلكتروني مطلوب');
+             }
+             final email = value.trim();
+             final isValid =
+                 RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email);
+-            return isValid ? null : 'أدخل بريداً إلكترونياً صحيحاً';
++            return isValid
++                ? null
++                : context.tr('أدخل بريداً إلكترونياً صحيحاً');
+           },
+           keyboardType: TextInputType.emailAddress,
+           textInputAction: TextInputAction.done,
+@@ -225,9 +229,9 @@ class _ContactField extends StatelessWidget {
+             AutofillHints.email,
+           ],
+           onFieldSubmitted: onSubmitted,
+-          textDirection: TextDirection.rtl,
++          textDirection: TextDirection.ltr,
+           decoration: InputDecoration(
+-            hintText: 'أدخل هنا...',
++            hintText: context.tr('أدخل هنا...'),
+             prefixIcon: const Icon(
+               Icons.contact_mail_outlined,
+               color: AppColors.gold,
+diff --git a/lib/features/authentication/presentation/screens/login_screen.dart b/lib/features/authentication/presentation/screens/login_screen.dart
+index 4e8cf91..20fb0b5 100644
+--- a/lib/features/authentication/presentation/screens/login_screen.dart
++++ b/lib/features/authentication/presentation/screens/login_screen.dart
+@@ -1,4 +1,6 @@
+-import 'package:flutter/material.dart';
++import 'package:flutter/material.dart' hide Text;
++import 'package:electronic_municipality/l10n/localized_text.dart';
++import 'package:electronic_municipality/l10n/app_localizations.dart';
+ 
+ import '../../../../app/design_system.dart';
+ import '../../../../app/router.dart';
+@@ -270,7 +272,7 @@ class _AuthLoginScreenState extends State<AuthLoginScreen> {
+                   ),
+                   const SizedBox(height: AppSpacing.md),
+                   Align(
+-                    alignment: Alignment.centerRight,
++                    alignment: AlignmentDirectional.centerStart,
+                     child: TextButton(
+                       onPressed: _isLoading
+                           ? null
+@@ -552,15 +554,18 @@ class _LabeledLoginField extends StatelessWidget {
+         const SizedBox(height: AppSpacing.sm),
+         TextFormField(
+           controller: controller,
+-          validator: validator,
++          validator: (value) {
++            final error = validator(value);
++            return error == null ? null : context.tr(error);
++          },
+           obscureText: obscureText,
+           keyboardType: keyboardType,
+           textInputAction: textInputAction,
+           autofillHints: autofillHints,
+           onFieldSubmitted: onSubmitted,
+-          textDirection: TextDirection.rtl,
++          textDirection: TextDirection.ltr,
+           decoration: InputDecoration(
+-            hintText: hint,
++            hintText: context.tr(hint),
+             prefixIcon: Icon(
+               prefixIcon,
+               color: AppColors.muted,
+diff --git a/lib/features/authentication/presentation/screens/otp_screen.dart b/lib/features/authentication/presentation/screens/otp_screen.dart
+index b5a001d..b2dae9e 100644
+--- a/lib/features/authentication/presentation/screens/otp_screen.dart
++++ b/lib/features/authentication/presentation/screens/otp_screen.dart
+@@ -1,6 +1,7 @@
+ import 'dart:async';
+ 
+-import 'package:flutter/material.dart';
++import 'package:flutter/material.dart' hide Text;
++import 'package:electronic_municipality/l10n/localized_text.dart';
+ 
+ import '../../../../app/design_system.dart';
+ import '../../../../app/router.dart';
+diff --git a/lib/features/authentication/presentation/screens/reset_password_screen.dart b/lib/features/authentication/presentation/screens/reset_password_screen.dart
+index fbf1c72..d566996 100644
+--- a/lib/features/authentication/presentation/screens/reset_password_screen.dart
++++ b/lib/features/authentication/presentation/screens/reset_password_screen.dart
+@@ -1,4 +1,6 @@
+-import 'package:flutter/material.dart';
++import 'package:flutter/material.dart' hide Text;
++import 'package:electronic_municipality/l10n/localized_text.dart';
++import 'package:electronic_municipality/l10n/app_localizations.dart';
+ 
+ import '../../../../app/router.dart';
+ import '../../../../app/theme/app_colors.dart';
+@@ -334,7 +336,7 @@ class _ResetPasswordFieldState extends State<_ResetPasswordField> {
+           obscuringCharacter: '•',
+           autocorrect: false,
+           enableSuggestions: false,
+-          textDirection: TextDirection.rtl,
++          textDirection: TextDirection.ltr,
+           textInputAction: widget.textInputAction,
+           style: const TextStyle(
+             color: Color(0xFF1B1C19),
+@@ -342,8 +344,8 @@ class _ResetPasswordFieldState extends State<_ResetPasswordField> {
+             height: 1.5,
+           ),
+           decoration: InputDecoration(
+-            hintText: widget.hint,
+-            hintTextDirection: TextDirection.rtl,
++            hintText: context.tr(widget.hint),
++            hintTextDirection: Directionality.of(context),
+             hintStyle: const TextStyle(
+               color: Color(0x80414844),
+               fontSize: 16,
+@@ -372,7 +374,9 @@ class _ResetPasswordFieldState extends State<_ResetPasswordField> {
+               minHeight: 48,
+             ),
+             suffixIcon: IconButton(
+-              tooltip: _obscureText ? 'إظهار كلمة المرور' : 'إخفاء كلمة المرور',
++              tooltip: context.tr(
++                _obscureText ? 'إظهار كلمة المرور' : 'إخفاء كلمة المرور',
++              ),
+               onPressed: () => setState(() => _obscureText = !_obscureText),
+               padding: EdgeInsets.zero,
+               splashRadius: 20,
+diff --git a/lib/features/authentication/presentation/screens/signup_screen.dart b/lib/features/authentication/presentation/screens/signup_screen.dart
+index 2372f6b..708005f 100644
+--- a/lib/features/authentication/presentation/screens/signup_screen.dart
++++ b/lib/features/authentication/presentation/screens/signup_screen.dart
+@@ -1,4 +1,6 @@
+-import 'package:flutter/material.dart';
++import 'package:flutter/material.dart' hide Text;
++import 'package:electronic_municipality/l10n/localized_text.dart';
++import 'package:electronic_municipality/l10n/app_localizations.dart';
+ import 'package:flutter/services.dart';
+ 
+ import '../../../../app/router.dart';
+@@ -147,10 +149,6 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
+       initialDate: _birthDate ?? DateTime(2000),
+       firstDate: DateTime(1900),
+       lastDate: DateTime(now.year, now.month, now.day),
+-      builder: (context, child) => Directionality(
+-        textDirection: TextDirection.rtl,
+-        child: child ?? const SizedBox.shrink(),
+-      ),
+     );
+ 
+     if (selectedDate == null || !mounted) return;
+@@ -338,7 +336,7 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
+                               ),
+                               if (_governorates.isEmpty && !_isLoadingLocations)
+                                 Align(
+-                                  alignment: Alignment.centerRight,
++                                  alignment: AlignmentDirectional.centerStart,
+                                   child: TextButton.icon(
+                                     onPressed: _loadGovernorates,
+                                     icon: const Icon(Icons.refresh_rounded),
+@@ -349,7 +347,7 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
+                                   _municipalities.isEmpty &&
+                                   !_isLoadingMunicipalities)
+                                 Align(
+-                                  alignment: Alignment.centerRight,
++                                  alignment: AlignmentDirectional.centerStart,
+                                   child: TextButton.icon(
+                                     onPressed: () => _selectGovernorate(
+                                       _selectedGovernorateId,
+@@ -785,7 +783,7 @@ class _SignupTextField extends StatelessWidget {
+     this.autofillHints,
+     this.inputFormatters,
+     this.onFieldSubmitted,
+-    this.textDirection = TextDirection.rtl,
++    this.textDirection,
+     this.textAlign = TextAlign.start,
+   });
+ 
+@@ -803,12 +801,14 @@ class _SignupTextField extends StatelessWidget {
+   final Iterable<String>? autofillHints;
+   final List<TextInputFormatter>? inputFormatters;
+   final ValueChanged<String>? onFieldSubmitted;
+-  final TextDirection textDirection;
++  final TextDirection? textDirection;
+   final TextAlign textAlign;
+   final FormFieldValidator<String> validator;
+ 
+   @override
+   Widget build(BuildContext context) {
++    final effectiveDirection =
++        textDirection ?? Directionality.of(context);
+     return Column(
+       crossAxisAlignment: CrossAxisAlignment.stretch,
+       children: [
+@@ -818,13 +818,16 @@ class _SignupTextField extends StatelessWidget {
+           style: _signupFieldLabelStyle,
+         ),
+         Align(
+-          alignment: Alignment.centerRight,
++          alignment: AlignmentDirectional.centerStart,
+           child: ConstrainedBox(
+             constraints: BoxConstraints(maxWidth: maxWidth),
+             child: TextFormField(
+               key: fieldKey,
+               controller: controller,
+-              validator: validator,
++              validator: (value) {
++                final error = validator(value);
++                return error == null ? null : context.tr(error);
++              },
+               obscureText: obscureText,
+               obscuringCharacter: '•',
+               autocorrect: autocorrect,
+@@ -834,13 +837,13 @@ class _SignupTextField extends StatelessWidget {
+               autofillHints: autofillHints,
+               inputFormatters: inputFormatters,
+               onFieldSubmitted: onFieldSubmitted,
+-              textDirection: textDirection,
++              textDirection: effectiveDirection,
+               textAlign: textAlign,
+               style: _signupFieldTextStyle,
+               decoration: _signupInputDecoration(
+-                hint: hint,
++                hint: context.tr(hint),
+                 height: inputHeight,
+-                hintDirection: textDirection,
++                hintDirection: effectiveDirection,
+               ),
+             ),
+           ),
+@@ -872,7 +875,7 @@ class _SignupDateField extends StatelessWidget {
+           style: _signupFieldLabelStyle,
+         ),
+         Align(
+-          alignment: Alignment.centerRight,
++          alignment: AlignmentDirectional.centerStart,
+           child: ConstrainedBox(
+             constraints: const BoxConstraints(
+               maxWidth: _signupFieldMaxWidth,
+@@ -880,7 +883,10 @@ class _SignupDateField extends StatelessWidget {
+             child: TextFormField(
+               key: const ValueKey('signup_birth_date_field'),
+               controller: controller,
+-              validator: validator,
++              validator: (value) {
++                final error = validator(value);
++                return error == null ? null : context.tr(error);
++              },
+               readOnly: true,
+               onTap: onTap,
+               textDirection: TextDirection.ltr,
+@@ -943,13 +949,16 @@ class _SignupDropdownField<T> extends StatelessWidget {
+           style: _signupFieldLabelStyle,
+         ),
+         Align(
+-          alignment: Alignment.centerRight,
++          alignment: AlignmentDirectional.centerStart,
+           child: ConstrainedBox(
+             constraints: BoxConstraints(maxWidth: maxWidth),
+             child: DropdownButtonFormField<T>(
+               key: fieldKey,
+               value: value,
+-              validator: validator,
++              validator: (value) {
++                final error = validator(value);
++                return error == null ? null : context.tr(error);
++              },
+               onChanged: onChanged,
+               isExpanded: true,
+               menuMaxHeight: 320,
+@@ -981,7 +990,7 @@ class _SignupDropdownField<T> extends StatelessWidget {
+               decoration: _signupInputDecoration(
+                 hint: '',
+                 height: _signupFieldHeight,
+-                hintDirection: TextDirection.rtl,
++                hintDirection: Directionality.of(context),
+               ).copyWith(
+                 contentPadding: const EdgeInsetsDirectional.fromSTEB(
+                   12,
+diff --git a/lib/features/complaints/data/models/complaint_models.dart b/lib/features/complaints/data/models/complaint_models.dart
+index 672bba9..aa7d280 100644
+--- a/lib/features/complaints/data/models/complaint_models.dart
++++ b/lib/features/complaints/data/models/complaint_models.dart
+@@ -1,5 +1,6 @@
+ import 'dart:typed_data';
+ 
++import '../../../../core/config/api_config.dart';
+ import '../../../../core/network/api_exception.dart';
+ 
+ class ComplaintCategory {
+@@ -36,6 +37,8 @@ class ComplaintStatus {
+   const ComplaintStatus({
+     required this.key,
+     required this.label,
++    this.id,
++    this.isTerminal,
+   });
+ 
+   factory ComplaintStatus.fromJson(Object? value) {
+@@ -55,11 +58,15 @@ class ComplaintStatus {
+       label: _nullableString(json['label']) ??
+           _nullableString(json['name']) ??
+           key,
++      id: _nullableInt(json['id']),
++      isTerminal: _nullableBool(json['is_terminal']),
+     );
+   }
+ 
+   final String key;
+   final String label;
++  final int? id;
++  final bool? isTerminal;
+ 
+   bool get isDraft => key.toLowerCase() == 'draft';
+ }
+@@ -69,29 +76,32 @@ class ComplaintImage {
+     required this.id,
+     required this.url,
+     this.name,
++    this.mimeType,
++    this.fileSize,
+   });
+ 
+   factory ComplaintImage.fromJson(Map<String, dynamic> json) {
+     return ComplaintImage(
+       id: _requiredInt(json, 'id'),
+-      url: _requiredStringFromKeys(
+-        json,
+-        const <String>[
+-          'url',
+-          'view_url',
+-          'image_url',
+-          'path',
+-        ],
++      url: ApiConfig.resolveServerUrl(
++        _requiredStringFromKeys(
++          json,
++          const <String>['url', 'view_url', 'image_url', 'path'],
++        ),
+       ),
+       name: _nullableString(json['name']) ??
+           _nullableString(json['file_name']) ??
+           _nullableString(json['original_name']),
++      mimeType: _nullableString(json['mime_type']),
++      fileSize: _nullableInt(json['file_size']),
+     );
+   }
+ 
+   final int id;
+   final String url;
+   final String? name;
++  final String? mimeType;
++  final int? fileSize;
+ }
+ 
+ class ComplaintReport {
+@@ -100,14 +110,20 @@ class ComplaintReport {
+     required this.status,
+     required this.images,
+     this.municipalityId,
++    this.municipalityName,
+     this.categoryId,
+     this.category,
++    this.complaintId,
+     this.title,
+     this.description,
+     this.textLocation,
+     this.latitude,
+     this.longitude,
+     this.serverCanEdit,
++    this.reportersCount,
++    this.isLinked,
++    this.submittedAt,
++    this.linkedAt,
+     this.createdAt,
+     this.updatedAt,
+   });
+@@ -125,8 +141,9 @@ class ComplaintReport {
+           .toList(growable: false),
+       municipalityId: _nullableInt(json['municipality_id']) ??
+           _nullableInt(municipalityJson?['id']),
+-      categoryId: _nullableInt(json['category_id']) ??
+-          _nullableInt(categoryJson?['id']),
++      municipalityName: _nullableString(municipalityJson?['name']),
++      categoryId:
++          _nullableInt(json['category_id']) ?? _nullableInt(categoryJson?['id']),
+       category: categoryJson == null
+           ? null
+           : ComplaintCategory(
+@@ -136,11 +153,16 @@ class ComplaintReport {
+               key: _nullableString(categoryJson['key']),
+             ),
+       title: _nullableString(json['title']),
++      complaintId: _nullableInt(json['complaint_id']),
+       description: _nullableString(json['description']),
+       textLocation: _nullableString(json['text_location']),
+       latitude: _nullableDouble(json['latitude']),
+       longitude: _nullableDouble(json['longitude']),
+       serverCanEdit: _nullableBool(json['can_edit']),
++      reportersCount: _nullableInt(json['reporters_count']),
++      isLinked: _nullableBool(json['is_linked']),
++      submittedAt: _nullableDateTime(json['submitted_at']),
++      linkedAt: _nullableDateTime(json['linked_at']),
+       createdAt: _nullableDateTime(json['created_at']),
+       updatedAt: _nullableDateTime(json['updated_at']),
+     );
+@@ -150,8 +172,10 @@ class ComplaintReport {
+   final ComplaintStatus status;
+   final List<ComplaintImage> images;
+   final int? municipalityId;
++  final String? municipalityName;
+   final int? categoryId;
+   final ComplaintCategory? category;
++  final int? complaintId;
+   final String? title;
+   final String? description;
+   final String? textLocation;
+@@ -161,6 +185,10 @@ class ComplaintReport {
+   /// If the backend sends `can_edit`, it is the authority. The draft status is
+   /// used only as a compatibility fallback when that field is absent.
+   final bool? serverCanEdit;
++  final int? reportersCount;
++  final bool? isLinked;
++  final DateTime? submittedAt;
++  final DateTime? linkedAt;
+   final DateTime? createdAt;
+   final DateTime? updatedAt;
+ 
+diff --git a/b/lib/features/complaints/presentation/screens/complaint_details_screen.dart b/lib/features/complaints/presentation/screens/complaint_details_screen.dart
+new file mode 100644
+index 0000000..d2d78f2
+--- /dev/null
++++ b/lib/features/complaints/presentation/screens/complaint_details_screen.dart
+@@ -0,0 +1,770 @@
++import 'package:flutter/material.dart' hide Text;
++import 'package:electronic_municipality/l10n/app_localizations.dart';
++import 'package:electronic_municipality/l10n/localized_text.dart';
++
++import '../../../../app/theme/app_colors.dart';
++import '../../../../core/network/api_exception.dart';
++import '../../../../shared/widgets/municipality_widgets.dart';
++import '../../data/models/complaint_models.dart';
++import '../../domain/complaints_repository.dart';
++
++class ComplaintDetailsScreen extends StatefulWidget {
++  const ComplaintDetailsScreen({
++    super.key,
++    required this.summary,
++    required this.repository,
++  });
++
++  final ComplaintReport summary;
++  final ComplaintsRepository repository;
++
++  @override
++  State<ComplaintDetailsScreen> createState() =>
++      _ComplaintDetailsScreenState();
++}
++
++class _ComplaintDetailsScreenState extends State<ComplaintDetailsScreen> {
++  late ComplaintReport _report;
++  bool _loading = true;
++  String? _error;
++
++  @override
++  void initState() {
++    super.initState();
++    _report = widget.summary;
++    _load();
++  }
++
++  Future<void> _load() async {
++    setState(() {
++      _loading = true;
++      _error = null;
++    });
++    try {
++      final report = await widget.repository.getReport(widget.summary.id);
++      if (!mounted) return;
++      setState(() => _report = report);
++    } catch (error, stackTrace) {
++      debugPrint('LOAD COMPLAINT DETAILS ERROR: $error');
++      debugPrintStack(stackTrace: stackTrace);
++      if (!mounted) return;
++      setState(() => _error = _messageFor(error));
++    } finally {
++      if (mounted) setState(() => _loading = false);
++    }
++  }
++
++  @override
++  Widget build(BuildContext context) {
++    return Scaffold(
++      key: const ValueKey('complaint_details_screen'),
++      backgroundColor: AppColors.background,
++      body: SafeArea(
++        child: Column(
++          children: [
++            _DetailsHeader(report: _report),
++            if (_loading)
++              const LinearProgressIndicator(
++                minHeight: 2,
++                color: AppColors.primary,
++              ),
++            Expanded(
++              child: RefreshIndicator(
++                onRefresh: _load,
++                color: AppColors.primary,
++                child: ListView(
++                  physics: const AlwaysScrollableScrollPhysics(),
++                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 32),
++                  children: [
++                    Center(
++                      child: ConstrainedBox(
++                        constraints: const BoxConstraints(maxWidth: 720),
++                        child: Column(
++                          crossAxisAlignment: CrossAxisAlignment.stretch,
++                          children: [
++                            if (_error != null) ...[
++                              _DetailsNotice(message: _error!, retry: _load),
++                              const SizedBox(height: 14),
++                            ],
++                            _SummaryCard(report: _report),
++                            const SizedBox(height: 14),
++                            _LocationCard(report: _report),
++                            const SizedBox(height: 14),
++                            _ImagesCard(images: _report.images),
++                            const SizedBox(height: 14),
++                            _TimelineCard(report: _report),
++                          ],
++                        ),
++                      ),
++                    ),
++                  ],
++                ),
++              ),
++            ),
++          ],
++        ),
++      ),
++    );
++  }
++}
++
++class _DetailsHeader extends StatelessWidget {
++  const _DetailsHeader({required this.report});
++
++  final ComplaintReport report;
++
++  @override
++  Widget build(BuildContext context) {
++    return Container(
++      padding: const EdgeInsets.fromLTRB(12, 10, 18, 12),
++      decoration: const BoxDecoration(
++        color: AppColors.surface,
++        border: Border(bottom: BorderSide(color: AppColors.divider)),
++      ),
++      child: Row(
++        children: [
++          IconButton(
++            key: const ValueKey('close_complaint_details'),
++            onPressed: () => Navigator.of(context).pop(),
++            icon: Icon(
++              Directionality.of(context) == TextDirection.rtl
++                  ? Icons.arrow_forward_rounded
++                  : Icons.arrow_back_rounded,
++            ),
++            tooltip: context.tr('رجوع'),
++          ),
++          const SizedBox(width: 4),
++          Expanded(
++            child: Column(
++              crossAxisAlignment: CrossAxisAlignment.start,
++              children: [
++                const Text(
++                  'تفاصيل الشكوى',
++                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
++                ),
++                const SizedBox(height: 2),
++                Text(
++                  'رقم البلاغ #${report.id}',
++                  style: const TextStyle(
++                    color: AppColors.muted,
++                    fontSize: 13,
++                  ),
++                ),
++              ],
++            ),
++          ),
++          StatusPill(
++            label: report.status.label,
++            color: _statusColor(report.status.key),
++            pale: true,
++          ),
++        ],
++      ),
++    );
++  }
++}
++
++class _SummaryCard extends StatelessWidget {
++  const _SummaryCard({required this.report});
++
++  final ComplaintReport report;
++
++  @override
++  Widget build(BuildContext context) {
++    return AppPanel(
++      padding: const EdgeInsets.all(18),
++      elevation: true,
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.stretch,
++        children: [
++          Row(
++            children: [
++              const CircleIcon(
++                icon: Icons.description_outlined,
++                size: 46,
++                color: Color(0xFFE1EEE8),
++              ),
++              const SizedBox(width: 12),
++              Expanded(
++                child: Column(
++                  crossAxisAlignment: CrossAxisAlignment.start,
++                  children: [
++                    Text(
++                      report.title ?? 'شكوى #${report.id}',
++                      translate: report.title == null,
++                      key: const ValueKey('complaint_details_title'),
++                      style: const TextStyle(
++                        fontSize: 19,
++                        fontWeight: FontWeight.w900,
++                      ),
++                    ),
++                    if (report.category?.name != null) ...[
++                      const SizedBox(height: 3),
++                      Text(
++                        report.category!.name,
++                        key: const ValueKey('complaint_details_category'),
++                        style: const TextStyle(
++                          color: AppColors.primary,
++                          fontWeight: FontWeight.w700,
++                        ),
++                      ),
++                    ],
++                  ],
++                ),
++              ),
++            ],
++          ),
++          const SizedBox(height: 18),
++          const _CardLabel('وصف الشكوى'),
++          const SizedBox(height: 6),
++          Text(
++            report.description ?? 'لم يُضف وصف للشكوى.',
++            translate: report.description == null,
++            key: const ValueKey('complaint_details_description'),
++            style: TextStyle(
++              height: 1.65,
++              color: report.description == null
++                  ? AppColors.muted
++                  : AppColors.text,
++            ),
++          ),
++          if (report.municipalityName != null) ...[
++            const SizedBox(height: 16),
++            const Divider(height: 1, color: AppColors.divider),
++            const SizedBox(height: 14),
++            _InfoRow(
++              icon: Icons.account_balance_outlined,
++              label: 'البلدية',
++              value: report.municipalityName!,
++              translateValue: true,
++              valueKey: const ValueKey('complaint_details_municipality'),
++            ),
++          ],
++          if (report.complaintId != null) ...[
++            const SizedBox(height: 12),
++            _InfoRow(
++              icon: Icons.confirmation_number_outlined,
++              label: 'رقم الشكوى الموحدة',
++              value: '#${report.complaintId}',
++            ),
++          ],
++          if (report.reportersCount != null) ...[
++            const SizedBox(height: 12),
++            _InfoRow(
++              icon: Icons.groups_outlined,
++              label: 'عدد المبلّغين',
++              value: '${report.reportersCount}',
++            ),
++          ],
++        ],
++      ),
++    );
++  }
++}
++
++class _LocationCard extends StatelessWidget {
++  const _LocationCard({required this.report});
++
++  final ComplaintReport report;
++
++  @override
++  Widget build(BuildContext context) {
++    final hasCoordinates = report.latitude != null && report.longitude != null;
++    return AppPanel(
++      padding: const EdgeInsets.all(18),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.stretch,
++        children: [
++          const _SectionHeading(
++            icon: Icons.location_on_outlined,
++            title: 'موقع الشكوى',
++          ),
++          const SizedBox(height: 15),
++          _InfoRow(
++            icon: Icons.signpost_outlined,
++            label: 'وصف الموقع',
++            value: report.textLocation ?? 'لم يُضف وصف للموقع.',
++            translateValue: report.textLocation == null,
++            valueKey: const ValueKey('complaint_details_text_location'),
++          ),
++          if (hasCoordinates) ...[
++            const SizedBox(height: 13),
++            Container(
++              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
++              decoration: BoxDecoration(
++                color: const Color(0xFFEAF4EF),
++                borderRadius: BorderRadius.circular(10),
++                border: Border.all(color: AppColors.primary.withOpacity(.12)),
++              ),
++              child: Row(
++                children: [
++                  const Icon(
++                    Icons.my_location_rounded,
++                    color: AppColors.primary,
++                    size: 20,
++                  ),
++                  const SizedBox(width: 10),
++                  Expanded(
++                    child: Text(
++                      '${report.latitude!.toStringAsFixed(7)}, '
++                      '${report.longitude!.toStringAsFixed(7)}',
++                      key: const ValueKey('complaint_details_coordinates'),
++                      textDirection: TextDirection.ltr,
++                      textAlign: TextAlign.center,
++                      style: const TextStyle(
++                        color: AppColors.primary,
++                        fontWeight: FontWeight.w800,
++                      ),
++                    ),
++                  ),
++                ],
++              ),
++            ),
++          ],
++        ],
++      ),
++    );
++  }
++}
++
++class _ImagesCard extends StatelessWidget {
++  const _ImagesCard({required this.images});
++
++  final List<ComplaintImage> images;
++
++  @override
++  Widget build(BuildContext context) {
++    return AppPanel(
++      padding: const EdgeInsets.all(18),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.stretch,
++        children: [
++          _SectionHeading(
++            icon: Icons.photo_library_outlined,
++            title: 'الصور المرفقة',
++            trailing: images.isEmpty ? null : '${images.length}',
++          ),
++          const SizedBox(height: 15),
++          if (images.isEmpty)
++            Container(
++              padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 16),
++              decoration: BoxDecoration(
++                color: AppColors.surfaceMuted,
++                borderRadius: BorderRadius.circular(10),
++              ),
++              child: const Column(
++                children: [
++                  Icon(
++                    Icons.hide_image_outlined,
++                    color: AppColors.subtle,
++                    size: 34,
++                  ),
++                  SizedBox(height: 8),
++                  Text(
++                    'لا توجد صور مرفقة بهذه الشكوى.',
++                    textAlign: TextAlign.center,
++                    style: TextStyle(color: AppColors.muted),
++                  ),
++                ],
++              ),
++            )
++          else
++            LayoutBuilder(
++              builder: (context, constraints) {
++                final columns = constraints.maxWidth >= 580 ? 3 : 2;
++                return GridView.builder(
++                  shrinkWrap: true,
++                  physics: const NeverScrollableScrollPhysics(),
++                  itemCount: images.length,
++                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
++                    crossAxisCount: columns,
++                    crossAxisSpacing: 10,
++                    mainAxisSpacing: 10,
++                    childAspectRatio: .82,
++                  ),
++                  itemBuilder: (context, index) {
++                    final image = images[index];
++                    return _ComplaintImageTile(image: image);
++                  },
++                );
++              },
++            ),
++        ],
++      ),
++    );
++  }
++}
++
++class _ComplaintImageTile extends StatelessWidget {
++  const _ComplaintImageTile({required this.image});
++
++  final ComplaintImage image;
++
++  @override
++  Widget build(BuildContext context) {
++    return Material(
++      color: AppColors.surfaceMuted,
++      borderRadius: BorderRadius.circular(11),
++      clipBehavior: Clip.antiAlias,
++      child: InkWell(
++        key: ValueKey('complaint_image_${image.id}'),
++        onTap: () => Navigator.of(context).push(
++          MaterialPageRoute<void>(
++            builder: (_) => _FullScreenImage(image: image),
++          ),
++        ),
++        child: Column(
++          crossAxisAlignment: CrossAxisAlignment.stretch,
++          children: [
++            Expanded(
++              child: Hero(
++                tag: 'complaint-image-${image.id}',
++                child: Image.network(
++                  image.url,
++                  key: ValueKey('complaint_image_network_${image.id}'),
++                  fit: BoxFit.cover,
++                  frameBuilder: (context, child, frame, synchronous) {
++                    if (frame != null || synchronous) return child;
++                    return const Center(
++                      child: CircularProgressIndicator(
++                        strokeWidth: 2,
++                        color: AppColors.primary,
++                      ),
++                    );
++                  },
++                  errorBuilder: (context, error, stackTrace) => const ColoredBox(
++                    color: AppColors.surfaceMuted,
++                    child: Center(
++                      child: Icon(
++                        Icons.broken_image_outlined,
++                        color: AppColors.subtle,
++                        size: 34,
++                      ),
++                    ),
++                  ),
++                ),
++              ),
++            ),
++            Padding(
++              padding: const EdgeInsets.fromLTRB(9, 8, 9, 9),
++              child: Column(
++                crossAxisAlignment: CrossAxisAlignment.stretch,
++                children: [
++                  Text(
++                    image.name ?? 'صورة #${image.id}',
++                    translate: image.name == null,
++                    maxLines: 1,
++                    overflow: TextOverflow.ellipsis,
++                    style: const TextStyle(
++                      fontSize: 12,
++                      fontWeight: FontWeight.w700,
++                    ),
++                  ),
++                  if (image.fileSize != null) ...[
++                    const SizedBox(height: 2),
++                    Text(
++                      _formatBytes(image.fileSize!),
++                      translate: false,
++                      textDirection: TextDirection.ltr,
++                      style: const TextStyle(
++                        color: AppColors.muted,
++                        fontSize: 11,
++                      ),
++                    ),
++                  ],
++                ],
++              ),
++            ),
++          ],
++        ),
++      ),
++    );
++  }
++}
++
++class _FullScreenImage extends StatelessWidget {
++  const _FullScreenImage({required this.image});
++
++  final ComplaintImage image;
++
++  @override
++  Widget build(BuildContext context) {
++    return Scaffold(
++      backgroundColor: const Color(0xFF07110E),
++      body: SafeArea(
++        child: Stack(
++          children: [
++            Positioned.fill(
++              child: InteractiveViewer(
++                minScale: .8,
++                maxScale: 4,
++                child: Center(
++                  child: Hero(
++                    tag: 'complaint-image-${image.id}',
++                    child: Image.network(
++                      image.url,
++                      fit: BoxFit.contain,
++                      errorBuilder: (context, error, stackTrace) => const Column(
++                        mainAxisSize: MainAxisSize.min,
++                        children: [
++                          Icon(
++                            Icons.broken_image_outlined,
++                            color: Colors.white70,
++                            size: 52,
++                          ),
++                          SizedBox(height: 10),
++                          Text(
++                            'تعذر تحميل الصورة.',
++                            style: TextStyle(color: Colors.white70),
++                          ),
++                        ],
++                      ),
++                    ),
++                  ),
++                ),
++              ),
++            ),
++            PositionedDirectional(
++              top: 10,
++              end: 10,
++              child: IconButton(
++                onPressed: () => Navigator.of(context).pop(),
++                style: IconButton.styleFrom(
++                  backgroundColor: Colors.black.withOpacity(.46),
++                  foregroundColor: Colors.white,
++                ),
++                icon: const Icon(Icons.close_rounded),
++                tooltip: context.tr('إغلاق'),
++              ),
++            ),
++          ],
++        ),
++      ),
++    );
++  }
++}
++
++class _TimelineCard extends StatelessWidget {
++  const _TimelineCard({required this.report});
++
++  final ComplaintReport report;
++
++  @override
++  Widget build(BuildContext context) {
++    final rows = <Widget>[];
++    void add(IconData icon, String label, DateTime? value) {
++      if (value == null) return;
++      if (rows.isNotEmpty) rows.add(const SizedBox(height: 12));
++      rows.add(_InfoRow(icon: icon, label: label, value: _formatDate(value)));
++    }
++
++    add(Icons.add_circle_outline, 'تاريخ الإنشاء', report.createdAt);
++    add(Icons.update_outlined, 'آخر تحديث', report.updatedAt);
++    add(Icons.send_outlined, 'تاريخ الإرسال', report.submittedAt);
++    add(Icons.link_outlined, 'تاريخ الربط', report.linkedAt);
++
++    return AppPanel(
++      padding: const EdgeInsets.all(18),
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.stretch,
++        children: [
++          const _SectionHeading(
++            icon: Icons.history_rounded,
++            title: 'معلومات زمنية',
++          ),
++          const SizedBox(height: 15),
++          if (rows.isEmpty)
++            const Text(
++              'لا توجد معلومات زمنية متاحة.',
++              style: TextStyle(color: AppColors.muted),
++            )
++          else
++            ...rows,
++        ],
++      ),
++    );
++  }
++}
++
++class _SectionHeading extends StatelessWidget {
++  const _SectionHeading({
++    required this.icon,
++    required this.title,
++    this.trailing,
++  });
++
++  final IconData icon;
++  final String title;
++  final String? trailing;
++
++  @override
++  Widget build(BuildContext context) {
++    return Row(
++      children: [
++        Container(
++          width: 38,
++          height: 38,
++          decoration: const BoxDecoration(
++            color: Color(0xFFE1EEE8),
++            shape: BoxShape.circle,
++          ),
++          child: Icon(icon, color: AppColors.primary, size: 21),
++        ),
++        const SizedBox(width: 10),
++        Expanded(
++          child: Text(
++            title,
++            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
++          ),
++        ),
++        if (trailing != null)
++          Container(
++            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
++            decoration: BoxDecoration(
++              color: AppColors.surfaceMuted,
++              borderRadius: BorderRadius.circular(20),
++            ),
++            child: Text(
++              trailing!,
++              translate: false,
++              style: const TextStyle(
++                color: AppColors.primary,
++                fontWeight: FontWeight.w800,
++              ),
++            ),
++          ),
++      ],
++    );
++  }
++}
++
++class _InfoRow extends StatelessWidget {
++  const _InfoRow({
++    required this.icon,
++    required this.label,
++    required this.value,
++    this.valueKey,
++    this.translateValue = false,
++  });
++
++  final IconData icon;
++  final String label;
++  final String value;
++  final Key? valueKey;
++  final bool translateValue;
++
++  @override
++  Widget build(BuildContext context) {
++    return Row(
++      crossAxisAlignment: CrossAxisAlignment.start,
++      children: [
++        Icon(icon, size: 19, color: AppColors.primary),
++        const SizedBox(width: 9),
++        SizedBox(
++          width: 94,
++          child: Text(
++            label,
++            style: const TextStyle(color: AppColors.muted, fontSize: 13),
++          ),
++        ),
++        const SizedBox(width: 6),
++        Expanded(
++          child: Text(
++            value,
++            translate: translateValue,
++            key: valueKey,
++            style: const TextStyle(fontWeight: FontWeight.w700, height: 1.4),
++          ),
++        ),
++      ],
++    );
++  }
++}
++
++class _CardLabel extends StatelessWidget {
++  const _CardLabel(this.value);
++
++  final String value;
++
++  @override
++  Widget build(BuildContext context) {
++    return Text(
++      value,
++      style: const TextStyle(
++        color: AppColors.muted,
++        fontSize: 13,
++        fontWeight: FontWeight.w700,
++      ),
++    );
++  }
++}
++
++class _DetailsNotice extends StatelessWidget {
++  const _DetailsNotice({required this.message, required this.retry});
++
++  final String message;
++  final VoidCallback retry;
++
++  @override
++  Widget build(BuildContext context) {
++    return Container(
++      padding: const EdgeInsets.all(13),
++      decoration: BoxDecoration(
++        color: AppColors.danger.withOpacity(.08),
++        borderRadius: BorderRadius.circular(11),
++        border: Border.all(color: AppColors.danger.withOpacity(.28)),
++      ),
++      child: Row(
++        children: [
++          const Icon(Icons.error_outline, color: AppColors.danger),
++          const SizedBox(width: 9),
++          Expanded(
++            child: Text(
++              message,
++              style: const TextStyle(
++                color: AppColors.danger,
++                fontWeight: FontWeight.w700,
++              ),
++            ),
++          ),
++          TextButton(onPressed: retry, child: const Text('إعادة المحاولة')),
++        ],
++      ),
++    );
++  }
++}
++
++String _formatDate(DateTime value) {
++  final local = value.toLocal();
++  String two(int number) => number.toString().padLeft(2, '0');
++  return '${local.year}/${two(local.month)}/${two(local.day)} – '
++      '${two(local.hour)}:${two(local.minute)}';
++}
++
++String _formatBytes(int bytes) {
++  if (bytes < 1024) return '$bytes B';
++  final kilobytes = bytes / 1024;
++  if (kilobytes < 1024) return '${kilobytes.toStringAsFixed(1)} KB';
++  return '${(kilobytes / 1024).toStringAsFixed(1)} MB';
++}
++
++Color _statusColor(String key) {
++  switch (key.toLowerCase()) {
++    case 'draft':
++      return AppColors.gold;
++    case 'resolved':
++    case 'closed':
++      return AppColors.success;
++    case 'rejected':
++      return AppColors.danger;
++    case 'submitted':
++    case 'in_progress':
++      return AppColors.info;
++    default:
++      return AppColors.primary;
++  }
++}
++
++String _messageFor(Object error) => error is ApiException
++    ? error.message
++    : 'تعذر تحميل أحدث تفاصيل الشكوى. اسحب للأسفل للمحاولة مجددًا.';
+diff --git a/lib/features/complaints/presentation/screens/complaint_location_picker_screen.dart b/lib/features/complaints/presentation/screens/complaint_location_picker_screen.dart
+index 3ce43a2..e0a03cf 100644
+--- a/lib/features/complaints/presentation/screens/complaint_location_picker_screen.dart
++++ b/lib/features/complaints/presentation/screens/complaint_location_picker_screen.dart
+@@ -1,6 +1,8 @@
+ import 'dart:async';
+ 
+-import 'package:flutter/material.dart';
++import 'package:flutter/material.dart' hide Text;
++import 'package:electronic_municipality/l10n/localized_text.dart';
++import 'package:electronic_municipality/l10n/app_localizations.dart';
+ import 'package:flutter_map/flutter_map.dart';
+ import 'package:latlong2/latlong.dart';
+ 
+@@ -90,12 +92,16 @@ class _ComplaintLocationPickerScreenState
+   }
+ 
+   Future<void> _resolvePlace(LatLng point, int request) async {
++    final localeIdentifier = Localizations.localeOf(context).languageCode == 'en'
++        ? 'en_US'
++        : 'ar_SY';
+     try {
+       final place = await widget.placeResolver.resolve(
+         ComplaintLocation(
+           latitude: point.latitude,
+           longitude: point.longitude,
+         ),
++        localeIdentifier: localeIdentifier,
+       );
+       if (!_isCurrentPlaceRequest(point, request)) return;
+       setState(() {
+@@ -618,6 +624,7 @@ class _LocationSummary extends StatelessWidget {
+             children: [
+               Text(
+                 title,
++                translate: place == null,
+                 key: place == null
+                     ? null
+                     : const ValueKey('complaint_selected_place_name'),
+@@ -634,6 +641,7 @@ class _LocationSummary extends StatelessWidget {
+                 const SizedBox(height: 4),
+                 Text(
+                   subtitle,
++                  translate: place?.subtitle == null,
+                   key: place?.subtitle == null
+                       ? null
+                       : const ValueKey('complaint_selected_place_details'),
+@@ -693,6 +701,7 @@ class _CoordinateChip extends StatelessWidget {
+           const SizedBox(height: 3),
+           Text(
+             value,
++            translate: false,
+             textDirection: TextDirection.ltr,
+             maxLines: 1,
+             style: const TextStyle(
+diff --git a/lib/features/complaints/presentation/screens/complaints_screen.dart b/lib/features/complaints/presentation/screens/complaints_screen.dart
+index dcf61e3..814fa74 100644
+--- a/lib/features/complaints/presentation/screens/complaints_screen.dart
++++ b/lib/features/complaints/presentation/screens/complaints_screen.dart
+@@ -1,4 +1,6 @@
+-import 'package:flutter/material.dart';
++import 'package:flutter/material.dart' hide Text;
++import 'package:electronic_municipality/l10n/localized_text.dart';
++import 'package:electronic_municipality/l10n/app_localizations.dart';
+ import 'package:image_picker/image_picker.dart';
+ 
+ import '../../../../app/router.dart';
+@@ -10,6 +12,7 @@ import '../../../../shared/widgets/citizen_verification_notice.dart';
+ import '../../../../shared/widgets/municipality_widgets.dart';
+ import '../../data/models/complaint_models.dart';
+ import '../../domain/complaints_repository.dart';
++import 'complaint_details_screen.dart';
+ import 'complaint_location_picker_screen.dart';
+ 
+ typedef ComplaintImagePicker = Future<List<ComplaintAttachment>> Function();
+@@ -346,6 +349,18 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+     }
+   }
+ 
++  Future<void> _openDetails(ComplaintReport report) async {
++    await Navigator.of(context).push<void>(
++      MaterialPageRoute<void>(
++        builder: (_) => ComplaintDetailsScreen(
++          summary: report,
++          repository: _repository,
++        ),
++      ),
++    );
++    if (mounted) await _refreshReports();
++  }
++
+   Future<void> _deleteDraft(ComplaintReport report) async {
+     final confirmed = await showDialog<bool>(
+       context: context,
+@@ -560,16 +575,17 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+               : null,
+           isExpanded: true,
+           decoration: _decoration(
+-            'مجال الشكوى',
+-            'اختر المجال الرئيسي',
++            context.tr('مجال الشكوى'),
++            context.tr('اختر المجال الرئيسي'),
+             null,
+           ),
+           items: _categories
+               .map((item) =>
+                   DropdownMenuItem(value: item.id, child: Text(item.name)))
+               .toList(),
+-          onChanged:
+-              canEdit && !_busy && !_loading ? _selectCategoryGroup : null,
++          onChanged: canEdit && !_busy && !_loading
++              ? _selectCategoryGroup
++              : null,
+         ),
+         const SizedBox(height: 12),
+         DropdownButtonFormField<int>(
+@@ -579,9 +595,15 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+               : null,
+           isExpanded: true,
+           decoration: _decoration(
+-            'نوع الشكوى',
+-            _categoryGroupId == null ? 'اختر المجال أولًا' : 'اختر نوع المشكلة',
+-            _errorFor('category_id'),
++            context.tr('نوع الشكوى'),
++            context.tr(
++              _categoryGroupId == null
++                  ? 'اختر المجال أولًا'
++                  : 'اختر نوع المشكلة',
++            ),
++            _errorFor('category_id') == null
++                ? null
++                : context.tr(_errorFor('category_id')!),
+           ),
+           items: _selectedCategoryTypes
+               .map((item) =>
+@@ -642,7 +664,10 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+             ListTile(
+               dense: true,
+               leading: const Icon(Icons.image_outlined),
+-              title: Text(image.name ?? 'صورة مرفقة #${image.id}'),
++              title: Text(
++                image.name ?? 'صورة مرفقة #${image.id}',
++                translate: image.name == null,
++              ),
+               trailing: canEdit
+                   ? IconButton(
+                       icon: const Icon(Icons.delete_outline,
+@@ -655,7 +680,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+               dense: true,
+               leading: const Icon(Icons.add_photo_alternate_outlined,
+                   color: AppColors.info),
+-              title: Text(_pendingImages[index].name),
++              title: Text(_pendingImages[index].name, translate: false),
+               subtitle: const Text('ستُرفع بعد حفظ المسودة'),
+               trailing: IconButton(
+                 icon: const Icon(Icons.close),
+@@ -734,6 +759,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+           for (var index = 0; index < _reports.length; index++) ...[
+             _ComplaintTile(
+               report: _reports[index],
++              onOpen: () => _openDetails(_reports[index]),
+               onEdit:
+                   _reports[index].canEdit ? () => _edit(_reports[index]) : null,
+               onDelete: _reports[index].canEdit
+@@ -748,55 +774,108 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
+ }
+ 
+ class _ComplaintTile extends StatelessWidget {
+-  const _ComplaintTile({required this.report, this.onEdit, this.onDelete});
++  const _ComplaintTile({
++    required this.report,
++    required this.onOpen,
++    this.onEdit,
++    this.onDelete,
++  });
+   final ComplaintReport report;
++  final VoidCallback onOpen;
+   final VoidCallback? onEdit;
+   final VoidCallback? onDelete;
+ 
+   @override
+   Widget build(BuildContext context) {
+-    return Container(
+-      padding: const EdgeInsets.all(14),
+-      decoration: BoxDecoration(
+-          color: AppColors.surfaceMuted,
+-          borderRadius: BorderRadius.circular(10)),
+-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+-          Expanded(
+-              child: Text(report.title ?? 'شكوى #${report.id}',
+-                  style: const TextStyle(fontWeight: FontWeight.w800))),
+-          StatusPill(
+-              label: report.status.label,
+-              color: _statusColor(report.status.key),
+-              pale: true),
+-        ]),
+-        if (report.description != null) ...[
+-          const SizedBox(height: 7),
+-          Text(report.description!,
+-              maxLines: 2,
+-              overflow: TextOverflow.ellipsis,
+-              style: const TextStyle(color: AppColors.muted)),
+-        ],
+-        const SizedBox(height: 6),
+-        Row(children: [
+-          Text('#${report.id}',
+-              style: const TextStyle(color: AppColors.subtle)),
+-          const Spacer(),
+-          if (onEdit != null)
+-            TextButton.icon(
+-              key: ValueKey('edit_complaint_${report.id}'),
+-              onPressed: onEdit,
+-              icon: const Icon(Icons.edit_outlined, size: 18),
+-              label: const Text('تعديل'),
+-            ),
+-          if (onDelete != null)
+-            IconButton(
+-              key: ValueKey('delete_complaint_${report.id}'),
+-              onPressed: onDelete,
+-              icon: const Icon(Icons.delete_outline, color: AppColors.danger),
+-            ),
+-        ]),
+-      ]),
++    return Material(
++      color: AppColors.surfaceMuted,
++      borderRadius: BorderRadius.circular(10),
++      clipBehavior: Clip.antiAlias,
++      child: InkWell(
++        key: ValueKey('open_complaint_${report.id}'),
++        onTap: onOpen,
++        child: Padding(
++          padding: const EdgeInsets.all(14),
++          child: Column(
++            crossAxisAlignment: CrossAxisAlignment.stretch,
++            children: [
++              Row(
++                crossAxisAlignment: CrossAxisAlignment.start,
++                children: [
++                  Expanded(
++                    child: Text(
++                      report.title ?? 'شكوى #${report.id}',
++                      translate: report.title == null,
++                      style: const TextStyle(fontWeight: FontWeight.w800),
++                    ),
++                  ),
++                  StatusPill(
++                    label: report.status.label,
++                    color: _statusColor(report.status.key),
++                    pale: true,
++                  ),
++                ],
++              ),
++              if (report.description != null) ...[
++                const SizedBox(height: 7),
++                Text(
++                  report.description!,
++                  translate: false,
++                  maxLines: 2,
++                  overflow: TextOverflow.ellipsis,
++                  style: const TextStyle(color: AppColors.muted),
++                ),
++              ],
++              const SizedBox(height: 6),
++              Row(
++                children: [
++                  Text(
++                    '#${report.id}',
++                    translate: false,
++                    style: const TextStyle(color: AppColors.subtle),
++                  ),
++                  const SizedBox(width: 8),
++                  const Icon(
++                    Icons.photo_library_outlined,
++                    size: 16,
++                    color: AppColors.subtle,
++                  ),
++                  const SizedBox(width: 4),
++                  Text(
++                    '${report.images.length}',
++                    translate: false,
++                    style: const TextStyle(color: AppColors.subtle),
++                  ),
++                  const Spacer(),
++                  if (onEdit != null)
++                    TextButton.icon(
++                      key: ValueKey('edit_complaint_${report.id}'),
++                      onPressed: onEdit,
++                      icon: const Icon(Icons.edit_outlined, size: 18),
++                      label: const Text('تعديل'),
++                    ),
++                  if (onDelete != null)
++                    IconButton(
++                      key: ValueKey('delete_complaint_${report.id}'),
++                      onPressed: onDelete,
++                      icon: const Icon(
++                        Icons.delete_outline,
++                        color: AppColors.danger,
++                      ),
++                    ),
++                  const SizedBox(width: 2),
++                  Icon(
++                    Directionality.of(context) == TextDirection.rtl
++                        ? Icons.chevron_left_rounded
++                        : Icons.chevron_right_rounded,
++                    color: AppColors.primary,
++                  ),
++                ],
++              ),
++            ],
++          ),
++        ),
++      ),
+     );
+   }
+ }
+@@ -864,8 +943,9 @@ class _LocationField extends StatelessWidget {
+                           ? 'تم تحديد الموقع بنجاح'
+                           : 'اضغط لاختيار الموقع الدقيق',
+                       style: TextStyle(
+-                        color:
+-                            hasLocation ? AppColors.success : AppColors.muted,
++                        color: hasLocation
++                            ? AppColors.success
++                            : AppColors.muted,
+                         fontSize: 12.5,
+                       ),
+                     ),
+@@ -937,8 +1017,12 @@ class _Field extends StatelessWidget {
+         enabled: enabled,
+         maxLines: lines,
+         minLines: lines,
+-        textDirection: TextDirection.rtl,
+-        decoration: _decoration(label, hint, error),
++        textDirection: Directionality.of(context),
++        decoration: _decoration(
++          context.tr(label),
++          context.tr(hint),
++          error == null ? null : context.tr(error!),
++        ),
+       );
+ }
+ 
+diff --git a/lib/features/complaints/presentation/services/complaint_location_service.dart b/lib/features/complaints/presentation/services/complaint_location_service.dart
+index 016835f..bf64173 100644
+--- a/lib/features/complaints/presentation/services/complaint_location_service.dart
++++ b/lib/features/complaints/presentation/services/complaint_location_service.dart
+@@ -103,18 +103,24 @@ class ComplaintPlace {
+ }
+ 
+ abstract class ComplaintPlaceResolver {
+-  Future<ComplaintPlace?> resolve(ComplaintLocation location);
++  Future<ComplaintPlace?> resolve(
++    ComplaintLocation location, {
++    String localeIdentifier = 'ar_SY',
++  });
+ }
+ 
+ class NativeComplaintPlaceResolver implements ComplaintPlaceResolver {
+   const NativeComplaintPlaceResolver();
+ 
+   @override
+-  Future<ComplaintPlace?> resolve(ComplaintLocation location) async {
++  Future<ComplaintPlace?> resolve(
++    ComplaintLocation location, {
++    String localeIdentifier = 'ar_SY',
++  }) async {
+     final placemarks = await placemarkFromCoordinates(
+       location.latitude,
+       location.longitude,
+-      localeIdentifier: 'ar_SY',
++      localeIdentifier: localeIdentifier,
+     );
+     if (placemarks.isEmpty) return null;
+ 
+@@ -127,6 +133,7 @@ class NativeComplaintPlaceResolver implements ComplaintPlaceResolver {
+       place.locality,
+       place.administrativeArea,
+     ]);
++    final separator = localeIdentifier.startsWith('ar') ? '، ' : ', ';
+     final details = _uniqueValues([
+       place.street,
+       place.subLocality,
+@@ -134,7 +141,7 @@ class NativeComplaintPlaceResolver implements ComplaintPlaceResolver {
+       place.subAdministrativeArea,
+       place.administrativeArea,
+       place.country,
+-    ]).where((value) => value != title).take(3).join('، ');
++    ]).where((value) => value != title).take(3).join(separator);
+ 
+     if (title == null && details.isEmpty) return null;
+     return ComplaintPlace(
+diff --git a/lib/features/home/presentation/screens/app_shell.dart b/lib/features/home/presentation/screens/app_shell.dart
+index e21cf83..0a978a2 100644
+--- a/lib/features/home/presentation/screens/app_shell.dart
++++ b/lib/features/home/presentation/screens/app_shell.dart
+@@ -1,4 +1,6 @@
+-import 'package:flutter/material.dart';
++import 'package:flutter/material.dart' hide Text;
++import 'package:electronic_municipality/l10n/localized_text.dart';
++import 'package:electronic_municipality/l10n/app_localizations.dart';
+ import '../../../../app/router.dart';
+ import '../../../../app/theme/app_colors.dart';
+ import '../../../complaints/presentation/screens/complaints_screen.dart';
+@@ -166,31 +168,31 @@ class _MunicipalityBottomNavigationBar extends StatelessWidget {
+                 child: NavigationBar(
+                   selectedIndex: selectedIndex,
+                   onDestinationSelected: onDestinationSelected,
+-                  destinations: const [
++                  destinations: [
+                     NavigationDestination(
+-                      icon: Icon(Icons.home_outlined),
+-                      selectedIcon: Icon(Icons.home_rounded),
+-                      label: 'الرئيسية',
++                      icon: const Icon(Icons.home_outlined),
++                      selectedIcon: const Icon(Icons.home_rounded),
++                      label: context.tr('الرئيسية'),
+                     ),
+                     NavigationDestination(
+-                      icon: Icon(Icons.receipt_long_outlined),
+-                      selectedIcon: Icon(Icons.receipt_long_rounded),
+-                      label: 'المعاملات',
++                      icon: const Icon(Icons.receipt_long_outlined),
++                      selectedIcon: const Icon(Icons.receipt_long_rounded),
++                      label: context.tr('المعاملات'),
+                     ),
+                     NavigationDestination(
+-                      icon: Icon(Icons.chat_bubble_outline_rounded),
+-                      selectedIcon: Icon(Icons.chat_bubble_rounded),
+-                      label: 'الشكاوى',
++                      icon: const Icon(Icons.chat_bubble_outline_rounded),
++                      selectedIcon: const Icon(Icons.chat_bubble_rounded),
++                      label: context.tr('الشكاوى'),
+                     ),
+                     NavigationDestination(
+-                      icon: Icon(Icons.newspaper_outlined),
+-                      selectedIcon: Icon(Icons.newspaper_rounded),
+-                      label: 'الأخبار',
++                      icon: const Icon(Icons.newspaper_outlined),
++                      selectedIcon: const Icon(Icons.newspaper_rounded),
++                      label: context.tr('الأخبار'),
+                     ),
+                     NavigationDestination(
+-                      icon: Icon(Icons.settings_outlined),
+-                      selectedIcon: Icon(Icons.settings_rounded),
+-                      label: 'الإعدادات',
++                      icon: const Icon(Icons.settings_outlined),
++                      selectedIcon: const Icon(Icons.settings_rounded),
++                      label: context.tr('الإعدادات'),
+                     ),
+                   ],
+                 ),
+diff --git a/lib/features/home/presentation/screens/home_screen.dart b/lib/features/home/presentation/screens/home_screen.dart
+index 124b7d8..49b3b13 100644
+--- a/lib/features/home/presentation/screens/home_screen.dart
++++ b/lib/features/home/presentation/screens/home_screen.dart
+@@ -1,4 +1,6 @@
+-import 'package:flutter/material.dart';
++import 'package:flutter/material.dart' hide Text;
++import 'package:electronic_municipality/l10n/localized_text.dart';
++import 'package:electronic_municipality/l10n/app_localizations.dart';
+ 
+ import '../../../../app/theme/app_colors.dart';
+ import '../../../../core/constants/app_assets.dart';
+@@ -73,7 +75,7 @@ class HomeTopBar extends StatelessWidget {
+         ],
+       ),
+       child: Directionality(
+-        textDirection: TextDirection.ltr,
++        textDirection: Directionality.of(context),
+         child: Row(
+           children: [
+             SizedBox(
+@@ -81,7 +83,7 @@ class HomeTopBar extends StatelessWidget {
+               height: 40,
+               child: IconButton(
+                 key: const ValueKey('home_notifications_button'),
+-                tooltip: 'الإشعارات',
++                tooltip: context.tr('الإشعارات'),
+                 padding: EdgeInsets.zero,
+                 onPressed: () {},
+                 icon: const BadgeDot(
+@@ -98,18 +100,18 @@ class HomeTopBar extends StatelessWidget {
+               child: SizedBox(
+                 height: 42,
+                 child: Directionality(
+-                  textDirection: TextDirection.rtl,
++                  textDirection: Directionality.of(context),
+                   child: TextField(
+                     key: const ValueKey('home_search_field'),
+-                    textDirection: TextDirection.rtl,
+-                    textAlign: TextAlign.right,
++                    textDirection: Directionality.of(context),
++                    textAlign: TextAlign.start,
+                     style: const TextStyle(
+                       color: _homeText,
+                       fontSize: 16,
+                       height: 1.2,
+                     ),
+                     decoration: InputDecoration(
+-                      hintText: 'ابحث في الخدمات...',
++                      hintText: context.tr('ابحث في الخدمات...'),
+                       hintStyle: const TextStyle(
+                         color: _homeMutedText,
+                         fontSize: 16,
+@@ -199,7 +201,7 @@ class AnnouncementsSection extends StatelessWidget {
+       children: [
+         const Text(
+           'أحدث الأخبار والإعلانات',
+-          textAlign: TextAlign.right,
++          textAlign: TextAlign.start,
+           style: TextStyle(
+             color: _homeText,
+             fontSize: 20,
+@@ -300,7 +302,7 @@ class QuickActionsSection extends StatelessWidget {
+       children: [
+         const Text(
+           'الخدمات السريعة',
+-          textAlign: TextAlign.right,
++          textAlign: TextAlign.start,
+           style: TextStyle(
+             color: Color(0xFF00120A),
+             fontSize: 24,
+@@ -580,13 +582,13 @@ class _MunicipalityMapCardState extends State<MunicipalityMapCard> {
+               child: Column(
+                 children: [
+                   _MapControlButton(
+-                    tooltip: 'تكبير الخريطة',
++                    tooltip: context.tr('تكبير الخريطة'),
+                     icon: Icons.add_rounded,
+                     onTap: () => _changeZoom(0.1),
+                   ),
+                   const SizedBox(height: 8),
+                   _MapControlButton(
+-                    tooltip: 'تصغير الخريطة',
++                    tooltip: context.tr('تصغير الخريطة'),
+                     icon: Icons.remove_rounded,
+                     onTap: () => _changeZoom(-0.1),
+                   ),
+diff --git a/lib/features/news/presentation/screens/news_screen.dart b/lib/features/news/presentation/screens/news_screen.dart
+index 950b25f..f6a5bf3 100644
+--- a/lib/features/news/presentation/screens/news_screen.dart
++++ b/lib/features/news/presentation/screens/news_screen.dart
+@@ -1,4 +1,5 @@
+-import 'package:flutter/material.dart';
++import 'package:flutter/material.dart' hide Text;
++import 'package:electronic_municipality/l10n/localized_text.dart';
+ import '../../../../app/theme/app_colors.dart';
+ import '../../../../core/constants/app_assets.dart';
+ import '../../../../shared/widgets/municipality_widgets.dart';
+diff --git a/lib/features/profile/presentation/screens/identity_verification_screen.dart b/lib/features/profile/presentation/screens/identity_verification_screen.dart
+index 556eac5..cea71a8 100644
+--- a/lib/features/profile/presentation/screens/identity_verification_screen.dart
++++ b/lib/features/profile/presentation/screens/identity_verification_screen.dart
+@@ -1,4 +1,6 @@
+-import 'package:flutter/material.dart';
++import 'package:flutter/material.dart' hide Text;
++import 'package:electronic_municipality/l10n/localized_text.dart';
++import 'package:electronic_municipality/l10n/app_localizations.dart';
+ import 'package:image_picker/image_picker.dart';
+ 
+ import '../../../../app/theme/app_colors.dart';
+@@ -323,7 +325,7 @@ class _VerificationHeader extends StatelessWidget {
+             ),
+             const Spacer(),
+             IconButton(
+-              tooltip: 'رجوع',
++              tooltip: context.tr('رجوع'),
+               onPressed: () => Navigator.of(context).maybePop(),
+               icon: const Icon(Icons.arrow_back_rounded),
+             ),
+@@ -553,7 +555,7 @@ class _SelectedPhotoPreview extends StatelessWidget {
+             ),
+             const SizedBox(width: 10),
+             IconButton(
+-              tooltip: 'حذف الصورة',
++              tooltip: context.tr('حذف الصورة'),
+               onPressed: onRemove,
+               color: AppColors.danger,
+               icon: const Icon(Icons.delete_outline_rounded),
+diff --git a/lib/features/profile/presentation/screens/profile_screen.dart b/lib/features/profile/presentation/screens/profile_screen.dart
+index 69fc823..2592910 100644
+--- a/lib/features/profile/presentation/screens/profile_screen.dart
++++ b/lib/features/profile/presentation/screens/profile_screen.dart
+@@ -1,4 +1,6 @@
+-import 'package:flutter/material.dart';
++import 'package:flutter/material.dart' hide Text;
++import 'package:electronic_municipality/l10n/localized_text.dart';
++import 'package:electronic_municipality/l10n/app_localizations.dart';
+ 
+ import '../../../../app/theme/app_colors.dart';
+ import '../../../../core/di.dart';
+@@ -169,7 +171,7 @@ class _ProfileHeader extends StatelessWidget {
+             ),
+             const Spacer(),
+             IconButton(
+-              tooltip: 'رجوع',
++              tooltip: context.tr('رجوع'),
+               onPressed: () => Navigator.of(context).maybePop(),
+               icon: const Icon(Icons.arrow_back_rounded),
+             ),
+@@ -214,6 +216,7 @@ class _ProfileSummary extends StatelessWidget {
+           const SizedBox(height: 14),
+           Text(
+             user.displayName,
++            translate: false,
+             textAlign: TextAlign.center,
+             style: const TextStyle(
+               color: AppColors.text,
+@@ -271,6 +274,7 @@ class _ContactItem extends StatelessWidget {
+         Flexible(
+           child: Text(
+             text,
++            translate: false,
+             maxLines: 1,
+             overflow: TextOverflow.ellipsis,
+             textDirection: TextDirection.ltr,
+@@ -377,7 +381,7 @@ class _VerificationPanel extends StatelessWidget {
+           ] else if (isPending) ...[
+             const SizedBox(height: 14),
+             Align(
+-              alignment: Alignment.centerRight,
++              alignment: AlignmentDirectional.centerStart,
+               child: TextButton.icon(
+                 key: const ValueKey('refresh_verification_status'),
+                 onPressed: isRefreshing ? null : onRefresh,
+@@ -470,6 +474,7 @@ class _PersonalDataPanel extends StatelessWidget {
+         _ProfileFieldData(
+           label: 'الجنس',
+           value: _genderValue(profile['gender']),
++          translateValue: true,
+         ),
+         _ProfileFieldData(
+           label: 'مكان الولادة',
+@@ -478,6 +483,7 @@ class _PersonalDataPanel extends StatelessWidget {
+         _ProfileFieldData(
+           label: 'الرعاية الخاصة',
+           value: _booleanValue(profile['needs_special_care']),
++          translateValue: true,
+         ),
+       ] else
+         _ProfileFieldData(
+@@ -552,10 +558,12 @@ class _ProfileFieldData {
+   const _ProfileFieldData({
+     required this.label,
+     required this.value,
++    this.translateValue = false,
+   });
+ 
+   final String label;
+   final String value;
++  final bool translateValue;
+ }
+ 
+ class _ProfileFieldGrid extends StatelessWidget {
+@@ -582,6 +590,7 @@ class _ProfileFieldGrid extends StatelessWidget {
+                 child: ReadonlyField(
+                   label: field.label,
+                   value: field.value,
++                  translateValue: field.translateValue,
+                 ),
+               ),
+           ],
+diff --git a/lib/features/settings/presentation/screens/settings_screen.dart b/lib/features/settings/presentation/screens/settings_screen.dart
+index 695b88f..498aa7c 100644
+--- a/lib/features/settings/presentation/screens/settings_screen.dart
++++ b/lib/features/settings/presentation/screens/settings_screen.dart
+@@ -1,8 +1,10 @@
+-import 'package:flutter/material.dart';
++import 'package:flutter/material.dart' hide Text;
++import 'package:electronic_municipality/l10n/localized_text.dart';
+ import '../../../../app/router.dart';
+ import '../../../../app/theme/app_colors.dart';
+ import '../../../../core/di.dart';
+ import '../../../../core/network/api_exception.dart';
++import '../../../../l10n/app_locale_controller.dart';
+ import '../../../../shared/widgets/municipality_widgets.dart';
+ 
+ class SettingsScreen extends StatefulWidget {
+@@ -16,6 +18,22 @@ class SettingsScreen extends StatefulWidget {
+ class _SettingsScreenState extends State<SettingsScreen> {
+   bool _isLoggingOut = false;
+ 
++  Future<void> _openLanguagePicker() async {
++    final controller = AppLocaleScope.of(context);
++    await showModalBottomSheet<void>(
++      context: context,
++      isScrollControlled: true,
++      backgroundColor: Colors.transparent,
++      builder: (sheetContext) => _LanguagePickerSheet(
++        selectedLocale: controller.locale,
++        onSelected: (locale) {
++          Navigator.of(sheetContext).pop();
++          controller.setLocale(locale);
++        },
++      ),
++    );
++  }
++
+   Future<void> _logout() async {
+     if (_isLoggingOut) return;
+     setState(() => _isLoggingOut = true);
+@@ -65,8 +83,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
+               title: 'الإشعارات',
+               subtitle: 'تنبيهات المعاملات والمنطقة'),
+           const SizedBox(height: 12),
+-          const _SettingsTile(
+-              icon: Icons.language, title: 'اللغة', subtitle: 'العربية'),
++          _SettingsTile(
++            key: const ValueKey('settings_language_tile'),
++            icon: Icons.language,
++            title: 'اللغة',
++            subtitle: AppLocaleScope.of(context).isArabic
++                ? 'العربية'
++                : 'English',
++            onTap: _openLanguagePicker,
++          ),
+           const SizedBox(height: 12),
+           const _SettingsTile(
+               icon: Icons.info_outline,
+@@ -85,7 +110,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
+ 
+ class _SettingsTile extends StatelessWidget {
+   const _SettingsTile(
+-      {required this.icon,
++      {super.key,
++      required this.icon,
+       required this.title,
+       required this.subtitle,
+       this.onTap});
+@@ -119,7 +145,205 @@ class _SettingsTile extends StatelessWidget {
+                         style: const TextStyle(
+                             color: AppColors.muted, fontSize: 13))
+                   ])),
+-              const Icon(Icons.chevron_left, color: AppColors.muted)
++              Icon(
++                Directionality.of(context) == TextDirection.rtl
++                    ? Icons.chevron_left
++                    : Icons.chevron_right,
++                color: AppColors.muted,
++              )
+             ])));
+   }
+ }
++
++class _LanguagePickerSheet extends StatelessWidget {
++  const _LanguagePickerSheet({
++    required this.selectedLocale,
++    required this.onSelected,
++  });
++
++  final Locale selectedLocale;
++  final ValueChanged<Locale> onSelected;
++
++  @override
++  Widget build(BuildContext context) {
++    return SafeArea(
++      top: false,
++      child: Container(
++        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
++        decoration: const BoxDecoration(
++          color: AppColors.surface,
++          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
++        ),
++        child: Column(
++          mainAxisSize: MainAxisSize.min,
++          crossAxisAlignment: CrossAxisAlignment.stretch,
++          children: [
++            Center(
++              child: Container(
++                width: 48,
++                height: 5,
++                decoration: BoxDecoration(
++                  color: AppColors.border,
++                  borderRadius: BorderRadius.circular(99),
++                ),
++              ),
++            ),
++            const SizedBox(height: 20),
++            const Row(
++              children: [
++                CircleIcon(
++                  icon: Icons.translate_rounded,
++                  size: 48,
++                  color: Color(0xFFE1EEE8),
++                ),
++                SizedBox(width: 12),
++                Expanded(
++                  child: Column(
++                    crossAxisAlignment: CrossAxisAlignment.start,
++                    children: [
++                      Text(
++                        'اختيار اللغة',
++                        style: TextStyle(
++                          fontSize: 20,
++                          fontWeight: FontWeight.w900,
++                        ),
++                      ),
++                      SizedBox(height: 3),
++                      Text(
++                        'اختر لغة واجهة التطبيق',
++                        style: TextStyle(color: AppColors.muted),
++                      ),
++                    ],
++                  ),
++                ),
++              ],
++            ),
++            const SizedBox(height: 18),
++            _LanguageOption(
++              key: const ValueKey('select_arabic_language'),
++              locale: AppLocaleController.arabicLocale,
++              nativeName: 'العربية',
++              description: 'العربية · RTL',
++              selected: selectedLocale.languageCode == 'ar',
++              onTap: onSelected,
++            ),
++            const SizedBox(height: 10),
++            _LanguageOption(
++              key: const ValueKey('select_english_language'),
++              locale: AppLocaleController.englishLocale,
++              nativeName: 'English',
++              description: 'English · LTR',
++              selected: selectedLocale.languageCode == 'en',
++              onTap: onSelected,
++            ),
++            const SizedBox(height: 14),
++            const Text(
++              'سيتم تطبيق اللغة مباشرة وحفظها على هذا الجهاز.',
++              textAlign: TextAlign.center,
++              style: TextStyle(color: AppColors.muted, fontSize: 12.5),
++            ),
++          ],
++        ),
++      ),
++    );
++  }
++}
++
++class _LanguageOption extends StatelessWidget {
++  const _LanguageOption({
++    super.key,
++    required this.locale,
++    required this.nativeName,
++    required this.description,
++    required this.selected,
++    required this.onTap,
++  });
++
++  final Locale locale;
++  final String nativeName;
++  final String description;
++  final bool selected;
++  final ValueChanged<Locale> onTap;
++
++  @override
++  Widget build(BuildContext context) {
++    return Material(
++      color: selected ? const Color(0xFFEAF4EF) : AppColors.surfaceMuted,
++      borderRadius: BorderRadius.circular(14),
++      child: InkWell(
++        onTap: () => onTap(locale),
++        borderRadius: BorderRadius.circular(14),
++        child: Container(
++          minHeight: 72,
++          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
++          decoration: BoxDecoration(
++            borderRadius: BorderRadius.circular(14),
++            border: Border.all(
++              color: selected ? AppColors.primary : AppColors.border,
++              width: selected ? 1.5 : 1,
++            ),
++          ),
++          child: Row(
++            children: [
++              Container(
++                width: 42,
++                height: 42,
++                alignment: Alignment.center,
++                decoration: BoxDecoration(
++                  color: selected ? AppColors.primary : AppColors.surface,
++                  shape: BoxShape.circle,
++                ),
++                child: Text(
++                  locale.languageCode.toUpperCase(),
++                  textDirection: TextDirection.ltr,
++                  style: TextStyle(
++                    color: selected ? Colors.white : AppColors.primary,
++                    fontWeight: FontWeight.w900,
++                    fontSize: 12,
++                  ),
++                ),
++              ),
++              const SizedBox(width: 12),
++              Expanded(
++                child: Column(
++                  crossAxisAlignment: CrossAxisAlignment.start,
++                  children: [
++                    Text(
++                      nativeName,
++                      translate: false,
++                      textDirection: locale.languageCode == 'ar'
++                          ? TextDirection.rtl
++                          : TextDirection.ltr,
++                      style: const TextStyle(
++                        fontSize: 17,
++                        fontWeight: FontWeight.w900,
++                      ),
++                    ),
++                    const SizedBox(height: 3),
++                    Text(
++                      description,
++                      translate: false,
++                      textDirection: locale.languageCode == 'ar'
++                          ? TextDirection.rtl
++                          : TextDirection.ltr,
++                      style: const TextStyle(
++                        color: AppColors.muted,
++                        fontSize: 12.5,
++                      ),
++                    ),
++                  ],
++                ),
++              ),
++              Icon(
++                selected
++                    ? Icons.check_circle_rounded
++                    : Icons.circle_outlined,
++                color: selected ? AppColors.success : AppColors.subtle,
++              ),
++            ],
++          ),
++        ),
++      ),
++    );
++  }
++}
+diff --git a/lib/features/transactions/presentation/screens/transactions_screen.dart b/lib/features/transactions/presentation/screens/transactions_screen.dart
+index 4835d58..059108c 100644
+--- a/lib/features/transactions/presentation/screens/transactions_screen.dart
++++ b/lib/features/transactions/presentation/screens/transactions_screen.dart
+@@ -1,4 +1,5 @@
+-import 'package:flutter/material.dart';
++import 'package:flutter/material.dart' hide Text;
++import 'package:electronic_municipality/l10n/localized_text.dart';
+ 
+ import '../../../../app/router.dart';
+ import '../../../../app/theme/app_colors.dart';
+@@ -133,7 +134,11 @@ class TransactionCard extends StatelessWidget {
+                     style: const TextStyle(
+                         fontSize: 18, fontWeight: FontWeight.w800)),
+                 const SizedBox(height: 4),
+-                Text(id, style: const TextStyle(color: AppColors.muted))
++                Text(
++                  id,
++                  translate: false,
++                  style: const TextStyle(color: AppColors.muted),
++                )
+               ])),
+           StatusPill(
+               label: status, color: done ? AppColors.primary : AppColors.gold)
+diff --git a/b/lib/l10n/app_locale_controller.dart b/lib/l10n/app_locale_controller.dart
+new file mode 100644
+index 0000000..0d09b8b
+--- /dev/null
++++ b/lib/l10n/app_locale_controller.dart
+@@ -0,0 +1,115 @@
++import 'package:flutter/foundation.dart';
++import 'package:flutter/material.dart';
++import 'package:flutter_secure_storage/flutter_secure_storage.dart';
++
++abstract class AppLocaleStore {
++  Future<String?> readLanguageCode();
++
++  Future<void> writeLanguageCode(String languageCode);
++}
++
++class SecureAppLocaleStore implements AppLocaleStore {
++  const SecureAppLocaleStore({FlutterSecureStorage? storage})
++      : _storage = storage ?? const FlutterSecureStorage();
++
++  static const _key = 'preferred_app_language';
++  final FlutterSecureStorage _storage;
++
++  @override
++  Future<String?> readLanguageCode() => _storage.read(key: _key);
++
++  @override
++  Future<void> writeLanguageCode(String languageCode) {
++    return _storage.write(key: _key, value: languageCode);
++  }
++}
++
++class MemoryAppLocaleStore implements AppLocaleStore {
++  MemoryAppLocaleStore([this.languageCode]);
++
++  String? languageCode;
++
++  @override
++  Future<String?> readLanguageCode() async => languageCode;
++
++  @override
++  Future<void> writeLanguageCode(String languageCode) async {
++    this.languageCode = languageCode;
++  }
++}
++
++class AppLocaleController extends ChangeNotifier {
++  AppLocaleController({
++    AppLocaleStore? store,
++    Locale initialLocale = arabicLocale,
++  })  : _store = store ?? const SecureAppLocaleStore(),
++        _locale = _normalize(initialLocale);
++
++  static const Locale arabicLocale = Locale('ar');
++  static const Locale englishLocale = Locale('en');
++  static const List<Locale> supportedLocales = <Locale>[
++    arabicLocale,
++    englishLocale,
++  ];
++
++  final AppLocaleStore _store;
++  Locale _locale;
++  bool _loaded = false;
++
++  Locale get locale => _locale;
++  bool get isArabic => _locale.languageCode == arabicLocale.languageCode;
++  bool get isLoaded => _loaded;
++
++  Future<void> load() async {
++    try {
++      final languageCode = await _store.readLanguageCode();
++      if (languageCode != null) {
++        _locale = _normalize(Locale(languageCode));
++      }
++    } catch (error, stackTrace) {
++      debugPrint('LOAD APP LANGUAGE ERROR: $error');
++      debugPrintStack(stackTrace: stackTrace);
++    } finally {
++      _loaded = true;
++      notifyListeners();
++    }
++  }
++
++  Future<void> setLocale(Locale locale) async {
++    final normalized = _normalize(locale);
++    if (_locale == normalized) return;
++
++    _locale = normalized;
++    notifyListeners();
++
++    try {
++      await _store.writeLanguageCode(normalized.languageCode);
++    } catch (error, stackTrace) {
++      // The UI remains usable in the selected language for this session even
++      // when the platform preference store is temporarily unavailable.
++      debugPrint('SAVE APP LANGUAGE ERROR: $error');
++      debugPrintStack(stackTrace: stackTrace);
++    }
++  }
++
++  static Locale _normalize(Locale locale) {
++    return locale.languageCode.toLowerCase() == englishLocale.languageCode
++        ? englishLocale
++        : arabicLocale;
++  }
++}
++
++class AppLocaleScope extends InheritedNotifier<AppLocaleController> {
++  const AppLocaleScope({
++    super.key,
++    required AppLocaleController controller,
++    required super.child,
++  }) : super(notifier: controller);
++
++  static AppLocaleController of(BuildContext context) {
++    final scope =
++        context.dependOnInheritedWidgetOfExactType<AppLocaleScope>();
++    assert(scope != null, 'AppLocaleScope was not found above this context.');
++    return scope!.notifier!;
++  }
++}
+diff --git a/b/lib/l10n/app_localizations.dart b/lib/l10n/app_localizations.dart
+new file mode 100644
+index 0000000..1298142
+--- /dev/null
++++ b/lib/l10n/app_localizations.dart
+@@ -0,0 +1,650 @@
++import 'package:flutter/foundation.dart';
++import 'package:flutter/material.dart';
++
++class AppLocalizations {
++  const AppLocalizations(this.locale);
++
++  final Locale locale;
++
++  bool get isArabic => locale.languageCode.toLowerCase() == 'ar';
++
++  static AppLocalizations of(BuildContext context) {
++    final value = maybeOf(context);
++    assert(value != null, 'AppLocalizations delegate is not registered.');
++    return value!;
++  }
++
++  static AppLocalizations? maybeOf(BuildContext context) {
++    return Localizations.of<AppLocalizations>(context, AppLocalizations);
++  }
++
++  static const LocalizationsDelegate<AppLocalizations> delegate =
++      _AppLocalizationsDelegate();
++
++  String translate(String source) {
++    if (isArabic || source.trim().isEmpty) return source;
++    final exact = _english[source];
++    if (exact != null) return exact;
++    return _translateDynamic(source) ?? source;
++  }
++
++  String? _translateDynamic(String source) {
++    Match? match;
++
++    match = RegExp(r'^شكوى #(\d+)$').firstMatch(source);
++    if (match != null) return 'Complaint #${match.group(1)}';
++
++    match = RegExp(r'^رقم البلاغ #(\d+)$').firstMatch(source);
++    if (match != null) return 'Report #${match.group(1)}';
++
++    match = RegExp(r'^صورة مرفقة #(\d+)$').firstMatch(source);
++    if (match != null) return 'Attached image #${match.group(1)}';
++
++    match = RegExp(r'^صورة #(\d+)$').firstMatch(source);
++    if (match != null) return 'Image #${match.group(1)}';
++
++    match = RegExp(r'^تعديل المسودة #(\d+)$').firstMatch(source);
++    if (match != null) return 'Edit draft #${match.group(1)}';
++
++    match = RegExp(r'^إعادة إرسال الرمز \((.+)\)$').firstMatch(source);
++    if (match != null) return 'Resend code (${match.group(1)})';
++
++    match = RegExp(r'^أدخل الرمز المكون من 4 أرقام المرسل إلى (.+)$')
++        .firstMatch(source);
++    if (match != null) {
++      return 'Enter the 4-digit code sent to ${match.group(1)}';
++    }
++
++    match = RegExp(r'^رمز التحقق المكون من (\d+) أرقام$').firstMatch(source);
++    if (match != null) return '${match.group(1)}-digit verification code';
++
++    match = RegExp(r'^حقل (.+) مطلوب\.$').firstMatch(source);
++    if (match != null) {
++      return '${translate(match.group(1)!)} is required.';
++    }
++
++    match = RegExp(r'^قيمة (.+) ليست تاريخًا صالحًا\.$').firstMatch(source);
++    if (match != null) {
++      return '${translate(match.group(1)!)} is not a valid date.';
++    }
++
++    match = RegExp(r'^تأكيد (.+) غير مطابق\.$').firstMatch(source);
++    if (match != null) {
++      return '${translate(match.group(1)!)} confirmation does not match.';
++    }
++
++    match = RegExp(r'^(.+) المحدد غير موجود\.$').firstMatch(source);
++    if (match != null) {
++      return 'The selected ${translate(match.group(1)!)} was not found.';
++    }
++
++    match = RegExp(r'^(.+) مستخدم مسبقًا\.$').firstMatch(source);
++    if (match != null) {
++      return '${translate(match.group(1)!)} is already in use.';
++    }
++
++    match = RegExp(r'^تحقق من قيمة (.+)\.$').firstMatch(source);
++    if (match != null) return 'Check ${translate(match.group(1)!)}.';
++
++    const logoutSuffix = ' تم إنهاء الجلسة محليًا.';
++    if (source.endsWith(logoutSuffix)) {
++      final prefix = source.substring(0, source.length - logoutSuffix.length);
++      return '${translate(prefix)} The local session was ended.';
++    }
++
++    return null;
++  }
++
++  static const Map<String, String> _english = <String, String>{
++    // Settings, shell, and common navigation.
++    'الإعدادات': 'Settings',
++    'إدارة الحساب والتفضيلات': 'Manage your account and preferences',
++    'الملف الشخصي': 'Profile',
++    'البيانات الشخصية ومستندات التوثيق':
++        'Personal information and verification documents',
++    'الإشعارات': 'Notifications',
++    'تنبيهات المعاملات والمنطقة': 'Transaction and area alerts',
++    'اللغة': 'Language',
++    'العربية': 'Arabic',
++    'الإنجليزية': 'English',
++    'العربية · RTL': 'Arabic · RTL',
++    'حول التطبيق': 'About the app',
++    'بوابة المواطن الرقمية - الإصدار 1.0':
++        'Digital Citizen Portal — Version 1.0',
++    'تسجيل الخروج': 'Sign out',
++    'جارٍ تسجيل الخروج...': 'Signing out…',
++    'إنهاء الجلسة الحالية بأمان': 'Securely end the current session',
++    'اختيار اللغة': 'Choose language',
++    'اختر لغة واجهة التطبيق': 'Choose the app interface language',
++    'سيتم تطبيق اللغة مباشرة وحفظها على هذا الجهاز.':
++        'The language is applied immediately and saved on this device.',
++    'اللغة الحالية': 'Current language',
++    'إدارة الخدمات': 'Service management',
++    'الرئيسية': 'Home',
++    'المعاملات': 'Transactions',
++    'الشكاوى': 'Complaints',
++    'الأخبار': 'News',
++    'رجوع': 'Back',
++    'إلغاء': 'Cancel',
++    'حفظ': 'Save',
++    'تأكيد': 'Confirm',
++    'إعادة المحاولة': 'Try again',
++    'مطلوب': 'Required',
++    'يجب إدخال': 'Required',
++    'غير متوفر': 'Unavailable',
++    'غير موجود': 'Not found',
++    'موجود مسبق': 'Already exists',
++    'مستخدم مسبق': 'Already in use',
++    'غير متطابق': 'Does not match',
++    'التأكيد': 'Confirmation',
++    'صيغة': 'Format',
++    'رمز': 'Code',
++    'تاريخ': 'Date',
++    'بريد': 'Email',
++    'نعم': 'Yes',
++    'لا': 'No',
++
++    // Home and public content.
++    'بلديتنا الإلكترونية': 'Our E-Municipality',
++    'بوابة المواطن الرقمية': 'Digital Citizen Portal',
++    'جارٍ تحميل بوابة المواطن الرقمية':
++        'Loading the Digital Citizen Portal',
++    'الجمهورية العربية السورية': 'Syrian Arab Republic',
++    'الخدمات الإلكترونية': 'Digital services',
++    'الخدمات السريعة': 'Quick services',
++    'الخدمات والمعاملات الرسمية.': 'Official services and transactions.',
++    'تقديم شكوى': 'Submit a complaint',
++    'التبليغ عن المشكلات': 'Report public issues',
++    'تقديم معاملة': 'Submit a transaction',
++    'إدارة الطلبات الرسمية': 'Manage official requests',
++    'تبرع للمدينة': 'Donate to the city',
++    'ساهم في تطوير مجتمعنا': 'Help improve our community',
++    'سيتم توفير خدمة التبرع للمدينة قريبًا':
++        'The city donation service will be available soon.',
++    'ابحث في الخدمات...': 'Search services…',
++    'أحدث الأخبار والإعلانات': 'Latest news and announcements',
++    'تنبيهات المنطقة': 'Area alerts',
++    'افتتاح حديقة جديدة في وسط المدينة':
++        'A new park opens in the city center',
++    'تحديث آلية استقبال معاملات البناء':
++        'Updated process for receiving construction applications',
++    'تطوير المدينة': 'City development',
++    'إعلان رسمي': 'Official announcement',
++    'إعلانات وخدمات البلدية': 'Municipal announcements and services',
++    'تكبير الخريطة': 'Zoom in',
++    'تصغير الخريطة': 'Zoom out',
++
++    // Authentication and account access.
++    'تسجيل الدخول': 'Sign in',
++    'مواطن': 'Citizen',
++    'زائر': 'Visitor',
++    'رقم الهاتف أو البريد الإلكتروني': 'Phone number or email',
++    'البريد الإلكتروني أو رقم الهاتف': 'Email address or phone number',
++    'أدخل رقم الهاتف أو البريد': 'Enter your phone number or email',
++    'كلمة المرور': 'Password',
++    'أدخل كلمة المرور': 'Enter your password',
++    'نسيت كلمة المرور؟': 'Forgot your password?',
++    'نسيت كلمة المرور': 'Forgot password',
++    'ليس لديك حساب؟': 'Don’t have an account?',
++    'إنشاء حساب جديد': 'Create a new account',
++    'يمكنك الدخول كزائر واستعراض الخدمات العامة دون بريد إلكتروني أو كلمة مرور.':
++        'Continue as a guest to browse public services without an email or password.',
++    'بيانات تسجيل الدخول غير صحيحة.': 'The sign-in details are incorrect.',
++    'فشل تسجيل الدخول. حاول مرة أخرى.': 'Sign-in failed. Please try again.',
++    'بريدك الإلكتروني': 'Your email',
++    'أدخل بريدك الإلكتروني لاسترداد كلمة المرور':
++        'Enter your email to recover your password',
++    'أدخل هنا...': 'Enter here…',
++    'إرسال الرمز': 'Send code',
++    'فشل إرسال الرمز. حاول مرة أخرى.':
++        'Failed to send the code. Please try again.',
++    'تعذر التحقق من الرمز. حاول مرة أخرى.':
++        'The code could not be verified. Please try again.',
++    'تعذر تحديد وجهة رمز التحقق.':
++        'The verification-code destination could not be determined.',
++    'رمز التحقق': 'Verification code',
++    'أدخل رمز التحقق المكون من 4 أرقام.':
++        'Enter the 4-digit verification code.',
++    'الرمز غير صحيح. حاول مرة أخرى.':
++        'The code is incorrect. Please try again.',
++    'لم تستلم الرمز؟': 'Didn’t receive the code?',
++    'إعادة إرسال الرمز': 'Resend code',
++    'تمت إعادة إرسال الرمز': 'The code was resent.',
++    'فشل إعادة إرسال الرمز': 'Failed to resend the code.',
++    'تحقق': 'Verify',
++    'تعيين كلمة مرور جديدة': 'Set a new password',
++    'كلمة المرور الجديدة': 'New password',
++    'أدخل كلمة المرور الجديدة': 'Enter the new password',
++    'تأكيد كلمة المرور': 'Confirm password',
++    'أعد إدخال كلمة المرور': 'Re-enter the password',
++    'كلمات المرور غير متطابقة': 'Passwords do not match.',
++    'فشل تعيين كلمة المرور الجديدة': 'Failed to set the new password.',
++    'العودة إلى تسجيل الدخول': 'Back to sign in',
++    'تغيير كلمة المرور المؤقتة': 'Change temporary password',
++    'لأمان حسابك، يجب استبدال كلمة المرور المؤقتة قبل متابعة استخدام النظام.':
++        'For your account security, replace the temporary password before continuing.',
++    'الرجاء إدخال كلمة المرور الجديدة وتأكيدها\nللمتابعة.':
++        'Enter and confirm the new password to continue.',
++    'كلمة المرور المؤقتة': 'Temporary password',
++    'كلمة المرور الحالية': 'Current password',
++    'تأكيد كلمة المرور الجديدة': 'Confirm new password',
++    'تغيير كلمة المرور': 'Change password',
++    'جارٍ التحقق...': 'Verifying…',
++    'تم تغيير كلمة المرور. سجّل الدخول بكلمتك الجديدة.':
++        'Password changed. Sign in with your new password.',
++    'تعذر تغيير كلمة المرور المؤقتة.':
++        'The temporary password could not be changed.',
++    'إظهار كلمة المرور': 'Show password',
++    'إخفاء كلمة المرور': 'Hide password',
++    'يجب أن تحتوي كلمة المرور على:': 'Password must contain:',
++    '8 أحرف على الأقل': 'At least 8 characters',
++    'حرف كبير وحرف صغير': 'Uppercase and lowercase letters',
++    'رقم أو رمز خاص': 'A number or special character',
++    'يجب ألا تقل كلمة المرور عن 8 محارف':
++        'Password must be at least 8 characters.',
++    'يجب أن تختلف عن كلمة المرور المؤقتة':
++        'Must differ from the temporary password.',
++
++    // Registration.
++    'البيانات الشخصية': 'Personal information',
++    'إنشاء حساب مواطن': 'Create a citizen account',
++    'إنشاء الحساب الرسمي': 'Create official account',
++    'بوابة الخدمات الإلكترونية للجمهورية العربية السورية. يرجى إدخال بياناتك الرسمية بدقة.':
++        'Syrian Arab Republic e-services portal. Enter your official information accurately.',
++    'الاسم الكامل (كما في الهوية)': 'Full name (as shown on ID)',
++    'الاسم الثلاثي': 'Full legal name',
++    'أدخل الاسم الثلاثي كما في الهوية':
++        'Enter your full legal name exactly as shown on your ID.',
++    'الاسم الكامل': 'Full name',
++    'الرقم الوطني': 'National ID number',
++    'الرقم الوطني مطلوب': 'National ID number is required.',
++    'يجب أن يتكون الرقم الوطني من 11 رقماً':
++        'The national ID number must contain 11 digits.',
++    'الجنس': 'Gender',
++    'اختر الجنس...': 'Select gender…',
++    'اختر الجنس': 'Select a gender.',
++    'ذكر': 'Male',
++    'أنثى': 'Female',
++    'مكان الولادة': 'Place of birth',
++    'مكان الولادة مطلوب': 'Place of birth is required.',
++    'المحافظة - المدينة': 'Governorate — city',
++    'بيانات السكن': 'Residence information',
++    'المحافظة': 'Governorate',
++    'اختر المحافظة': 'Select a governorate.',
++    'اختر المحافظة...': 'Select a governorate…',
++    'جاري تحميل المحافظات...': 'Loading governorates…',
++    'البلدية التابع لها': 'Municipality',
++    'البلدية': 'Municipality',
++    'اختر البلدية': 'Select a municipality.',
++    'اختر البلدية...': 'Select a municipality…',
++    'جاري تحميل البلديات...': 'Loading municipalities…',
++    'إعادة تحميل البلديات': 'Reload municipalities',
++    'معلومات الدخول': 'Account credentials',
++    'رقم الهاتف الجوال': 'Mobile phone number',
++    'رقم الهاتف': 'Phone number',
++    'رقم الهاتف مطلوب': 'Phone number is required.',
++    'رقم الهاتف غير صحيح': 'Enter a valid phone number.',
++    'أدخل رقماً سورياً صحيحاً يبدأ بـ 09':
++        'Enter a valid Syrian mobile number starting with 09.',
++    'البريد الإلكتروني': 'Email address',
++    'البريد الإلكتروني غير صحيح': 'Enter a valid email address.',
++    'أدخل بريداً إلكترونياً صحيحاً': 'Enter a valid email address.',
++    'example@mail.sy': 'example@mail.sy',
++    'شخص يحتاج إلى رعاية خاصة (ذوي الاحتياجات الخاصة، كبار السن)':
++        'Person requiring special care (people with disabilities or older adults)',
++    'أوافق على ': 'I agree to ',
++    'الشروط والأحكام': 'Terms and Conditions',
++    ' وسياسة الخصوصية الخاصة بالبوابة.':
++        ' and the portal Privacy Policy.',
++    'يجب الموافقة على الشروط والأحكام':
++        'You must agree to the Terms and Conditions.',
++    'إنشاء الحساب': 'Create account',
++    'لديك حساب بالفعل؟': 'Already have an account?',
++    'تعذر إنشاء الحساب حاليًا. حاول مرة أخرى لاحقًا.':
++        'The account cannot be created right now. Please try again later.',
++    'تعذر تحميل المحافظات حاليًا. حاول مرة أخرى لاحقًا.':
++        'Governorates cannot be loaded right now. Please try again later.',
++    'تعذر تحميل البلديات حاليًا. حاول مرة أخرى لاحقًا.':
++        'Municipalities cannot be loaded right now. Please try again later.',
++    'كلمة المرور يجب أن تكون 8 أحرف على الأقل':
++        'Password must be at least 8 characters.',
++
++    // Complaints and map.
++    'أنشئ مسودة، أرفق الصور، ثم أرسلها للبلدية':
++        'Create a draft, attach photos, then send it to the municipality',
++    'بلاغ جديد': 'New report',
++    'تعديل المسودة': 'Edit draft',
++    'سجل الشكاوى': 'Complaint history',
++    'تفاصيل الشكوى': 'Complaint details',
++    'رقم الشكوى الموحدة': 'Unified complaint number',
++    'عدد المبلّغين': 'Number of reporters',
++    'موقع الشكوى': 'Complaint location',
++    'الصور المرفقة': 'Attached photos',
++    'لا توجد صور مرفقة بهذه الشكوى.':
++        'No photos are attached to this complaint.',
++    'لم يُضف وصف للشكوى.': 'No complaint description was added.',
++    'لم يُضف وصف للموقع.': 'No location description was added.',
++    'تعذر تحميل الصورة.': 'The image could not be loaded.',
++    'إغلاق': 'Close',
++    'معلومات زمنية': 'Timeline',
++    'تاريخ الإنشاء': 'Created',
++    'آخر تحديث': 'Last updated',
++    'تاريخ الإرسال': 'Submitted',
++    'تاريخ الربط': 'Linked',
++    'لا توجد معلومات زمنية متاحة.':
++        'No timeline information is available.',
++    'تعذر تحميل أحدث تفاصيل الشكوى. اسحب للأسفل للمحاولة مجددًا.':
++        'The latest complaint details could not be loaded. Pull down to try again.',
++    'إضافة شكوى جديدة': 'Add a new complaint',
++    'مجال الشكوى': 'Complaint category',
++    'تصنيف الشكوى': 'Complaint category',
++    'اختر المجال الرئيسي': 'Select the main category',
++    'نوع الشكوى': 'Complaint type',
++    'اختر المجال أولًا': 'Select a category first',
++    'اختر نوع المشكلة': 'Select the issue type',
++    'العنوان': 'Title',
++    'عنوان الشكوى': 'Complaint title',
++    'أدخل عنوانًا واضحًا': 'Enter a clear title',
++    'الوصف': 'Description',
++    'وصف الشكوى': 'Complaint description',
++    'اكتب تفاصيل المشكلة': 'Describe the issue',
++    'وصف الموقع (اختياري)': 'Location description (optional)',
++    'وصف الموقع': 'Location description',
++    'مثال: المزة، الشارع الرئيسي': 'Example: Al-Mazzeh, main street',
++    'موقع الشكوى على الخريطة': 'Complaint location on the map',
++    'تم تحديد الموقع بنجاح': 'Location selected successfully',
++    'اضغط لاختيار الموقع الدقيق': 'Tap to select the precise location',
++    'تغيير الموقع': 'Change location',
++    'اختيار من الخريطة': 'Select on map',
++    'صور الشكوى (اختياري)': 'Complaint photos (optional)',
++    'صور الشكوى': 'Complaint photos',
++    'JPG أو PNG، حتى 5MB لكل صورة.':
++        'JPG or PNG, up to 5 MB per image.',
++    'ستُرفع بعد حفظ المسودة': 'Will be uploaded after saving the draft',
++    'إضافة صور': 'Add photos',
++    'حفظ كمسودة': 'Save as draft',
++    'تحديث المسودة': 'Update draft',
++    'إرسال الشكوى': 'Submit complaint',
++    'إلغاء التعديل وبدء شكوى جديدة':
++        'Cancel editing and start a new complaint',
++    'الشكاوى السابقة': 'Previous complaints',
++    'لا توجد شكاوى حتى الآن.': 'No complaints yet.',
++    'تعديل': 'Edit',
++    'حذف': 'Delete',
++    'حذف المسودة': 'Delete draft',
++    'هل تريد حذف هذه المسودة نهائيًا؟':
++        'Do you want to permanently delete this draft?',
++    'تم حذف المسودة.': 'Draft deleted.',
++    'تم حفظ المسودة.': 'Draft saved.',
++    'تم إرسال الشكوى بنجاح.': 'Complaint submitted successfully.',
++    'تعذر تحديد بلديتك من الملف الشخصي. حدّث بيانات الحساب قبل الإرسال.':
++        'Your municipality could not be identified from your profile. Update your account details before submitting.',
++    'لا يمكن تعديل الشكوى بعد إرسالها.':
++        'A complaint cannot be edited after submission.',
++    'أكمل الحقول المطلوبة قبل إرسال الشكوى.':
++        'Complete the required fields before submitting the complaint.',
++    'اختيار موقع الشكوى': 'Choose complaint location',
++    'حدّد النقطة الأقرب للمشكلة': 'Select the point nearest to the issue',
++    'اضغط على الخريطة لتثبيت النقطة': 'Tap the map to place the pin',
++    'سنضيف اسم المكان والإحداثيات تلقائيًا':
++        'The place name and coordinates will be added automatically',
++    'خط العرض': 'Latitude',
++    'خط الطول': 'Longitude',
++    'استخدام موقعي الحالي': 'Use my current location',
++    'جارٍ تحديد موقعك...': 'Locating you…',
++    'اعتماد هذا الموقع': 'Confirm this location',
++    'اختر موقع المشكلة': 'Choose the issue location',
++    'المس الخريطة أو استخدم موقعك الحالي للبدء.':
++        'Tap the map or use your current location to begin.',
++    'جارٍ التعرّف على المكان...': 'Identifying the place…',
++    'لحظات ونحاول إظهار اسم الشارع أو الحي.':
++        'Please wait while we find the street or neighborhood name.',
++    'تم تحديد الموقع بالإحداثيات': 'Location identified by coordinates',
++    'موقع محدد على الخريطة': 'Selected map location',
++    'فتح إعدادات الموقع': 'Open location settings',
++    'فتح إعدادات التطبيق': 'Open app settings',
++    'لم يتوفر اسم لهذا الموضع، ويمكنك اعتماده بالإحداثيات.':
++        'No place name is available; you can confirm the coordinates.',
++    'تعذر جلب اسم المكان الآن، ويمكنك اعتماد الإحداثيات بأمان.':
++        'The place name is unavailable; you can safely confirm the coordinates.',
++
++    // Transaction and complaint statuses.
++    'متابعة الطلبات الرسمية': 'Track official requests',
++    'قيد المراجعة': 'Under review',
++    'مكتملة': 'Completed',
++    'بانتظار الدفع': 'Awaiting payment',
++    'طلب رخصة بناء': 'Building permit request',
++    'إخراج قيد عقاري': 'Property record extract',
++    'تسديد رسوم النظافة': 'Sanitation fee payment',
++    'مسودة': 'Draft',
++    'تم الإرسال': 'Submitted',
++    'مرسلة': 'Submitted',
++    'قيد المعالجة': 'In progress',
++    'مرفوضة': 'Rejected',
++    'محلولة': 'Resolved',
++    'مغلقة': 'Closed',
++
++    // Identity verification and profile.
++    'حساب المواطن': 'Citizen account',
++    'مستخدم تجريبي': 'Demo user',
++    'توثيق الحساب': 'Account verification',
++    'توثيق الحساب مطلوب': 'Account verification required',
++    'الحساب غير موثق': 'Account not verified',
++    'حساب المواطن غير موثق': 'Citizen account not verified',
++    'حساب المواطن غير موثق. يجب توثيق الحساب قبل إرسال الشكوى.':
++        'Your citizen account is not verified. Verify it before submitting a complaint.',
++    'توثيق الحساب الآن': 'Verify account now',
++    'توثيق الحساب قيد المراجعة': 'Account verification under review',
++    'طلب التوثيق قيد المراجعة': 'Verification request under review',
++    'الحساب موثق': 'Account verified',
++    'موثق': 'Verified',
++    'غير موثق': 'Not verified',
++    'أكمل توثيق هويتك': 'Complete identity verification',
++    'إرسال طلب التوثيق': 'Submit verification request',
++    'تحديث حالة التوثيق': 'Refresh verification status',
++    'تحديث حالة الطلب': 'Refresh request status',
++    'بعد اعتماد الطلب من البلدية.': 'after approval by the municipality.',
++    'يمكنك تجهيز المسودات، وسيصبح الإرسال متاحاً بعد اعتماد التوثيق من البلدية.':
++        'You can prepare drafts; submission becomes available after municipal approval.',
++    'يمكنك تجهيز المسودة، لكن يجب توثيق حسابك قبل إرسال الشكاوى والمعاملات الرسمية.':
++        'You can prepare a draft, but account verification is required before submitting official complaints and transactions.',
++    'طلب توثيق حسابك قيد المراجعة. يمكنك إرسال الشكوى بعد اعتماد الطلب من البلدية.':
++        'Your verification request is under review. You can submit the complaint after municipal approval.',
++    'البيانات المدخلة': 'Submitted information',
++    'JPG أو PNG — بحد أقصى 4MB': 'JPG or PNG — up to 4 MB',
++    'ارفع صورة واضحة للوجهين الأمامي والخلفي من هويتك. تُراجع الصور من البلدية قبل تفعيل الحساب الموثق.':
++        'Upload clear images of the front and back of your ID. The municipality will review them before verifying your account.',
++    'تُستخدم صور الهوية للتحقق من الحساب فقط. تأكد من صحة الصور قبل الإرسال لأن الطلب سيصبح قيد المراجعة.':
++        'ID images are used only for account verification. Check them before submitting because the request will enter review.',
++    'للوصول إلى كافة الخدمات والمعاملات الرسمية، أرسل صور الهوية المطلوبة ليتم التحقق منها.':
++        'To access all official services and transactions, submit the required ID images for verification.',
++    'تم استلام صور الهوية بنجاح. ستظهر حالة الحساب الموثق بعد اعتماد الطلب من البلدية.':
++        'Your ID images were received. Verified status will appear after municipal approval.',
++    'تم التحقق من بيانات هويتك، ويمكنك الآن الوصول إلى الخدمات والمعاملات الرسمية.':
++        'Your identity has been verified. You can now access official services and transactions.',
++    'تاريخ الميلاد': 'Date of birth',
++    'تاريخ التوظيف': 'Employment date',
++    'الرعاية الخاصة': 'Special care',
++    'حالة الرعاية الخاصة': 'Special-care status',
++    'الهوية': 'Identity document',
++    'إضافة صورة الهوية': 'Add ID photos',
++    'الوجه الأمامي للهوية': 'Front of ID',
++    'الوجه الخلفي للهوية': 'Back of ID',
++    'صورة الوجه الأمامي للهوية': 'Front ID image',
++    'صورة الوجه الخلفي للهوية': 'Back ID image',
++    'التقاط صورة بالكاميرا': 'Take a photo',
++    'اختيار صورة من الجهاز': 'Choose a photo from device',
++    'إضافة الصورة': 'Add photo',
++    'استبدال': 'Replace',
++    'حذف الصورة': 'Delete image',
++    'رفع ملف': 'Upload file',
++    'صورة': 'Image',
++    'الحجم': 'Size',
++    'الصيغة': 'Format',
++    'تأكد من وضوح الصورة وكامل بيانات الهوية.':
++        'Make sure the image and all ID details are clear.',
++    'تأكد من ظهور كامل الهوية دون قص الحواف.':
++        'Make sure the entire ID is visible without cropped edges.',
++    'تُراجع الصور من البلدية قبل تفعيل الحساب الموثق.':
++        'The municipality reviews the images before verification is activated.',
++    'تعذر اختيار الصورة. تحقق من صلاحيات الكاميرا والصور.':
++        'The image could not be selected. Check camera and photo permissions.',
++    'تعذر إرسال صور الهوية. حاول مرة أخرى.':
++        'ID images could not be sent. Please try again.',
++    'تم إرسال صور الهوية بنجاح، وسيتم إشعارك بعد مراجعتها.':
++        'ID images were submitted successfully. You will be notified after review.',
++    'تعذر تحميل الملف الشخصي.': 'The profile could not be loaded.',
++
++    // Validation, network, and server messages.
++    'هذا الحقل مطلوب.': 'This field is required.',
++    'تاريخ الميلاد مطلوب': 'Date of birth is required.',
++    'الاسم الكامل مطلوب': 'Full name is required.',
++    'البريد الإلكتروني مطلوب': 'Email address is required.',
++    'البريد الإلكتروني مطلوب وبصيغة صحيحة.':
++        'A valid email address is required.',
++    'رقم الهاتف أو البريد الإلكتروني مطلوب':
++        'Phone number or email is required.',
++    'رقم الهاتف أو البريد الإلكتروني مطلوب.':
++        'Phone number or email is required.',
++    'كلمة المرور مطلوبة': 'Password is required.',
++    'كلمة المرور الجديدة مطلوبة': 'New password is required.',
++    'كلمة المرور المؤقتة مطلوبة': 'Temporary password is required.',
++    'صيغة البريد الإلكتروني غير صحيحة.': 'Enter a valid email address.',
++    'تحقق من البيانات المدخلة.': 'Check the entered information.',
++    'البيانات المدخلة غير صالحة.': 'The entered information is invalid.',
++    'بيانات الاعتماد': 'Credentials',
++    'بيانات الدخول': 'Sign-in details',
++    'بيانات الدخول غير صحيحة أو انتهت صلاحية الجلسة.':
++        'The credentials are incorrect or the session has expired.',
++    'لم يتم العثور على حساب بهذه البيانات.':
++        'No account was found with these details.',
++    'رمز التحقق غير صحيح أو منتهي الصلاحية.':
++        'The verification code is incorrect or expired.',
++    'انتهت مهلة الاتصال بالخادم. حاول مرة أخرى.':
++        'The server connection timed out. Please try again.',
++    'تعذر الاتصال بالخادم. تحقق من الشبكة وعنوان الخادم.':
++        'Could not connect to the server. Check the network and server address.',
++    'تم إلغاء الطلب.': 'The request was cancelled.',
++    'تعذر التحقق من شهادة أمان الخادم.':
++        'The server security certificate could not be verified.',
++    'حدث خطأ غير متوقع أثناء الاتصال بالخادم.':
++        'An unexpected server connection error occurred.',
++    'تعذر إعداد الاتصال بالخادم.':
++        'The server connection could not be prepared.',
++    'حدث خطأ غير متوقع أثناء تجهيز الطلب.':
++        'An unexpected error occurred while preparing the request.',
++    'حدث خطأ في الخادم. حاول لاحقًا.':
++        'A server error occurred. Please try again later.',
++    'المورد المطلوب غير موجود.': 'The requested resource was not found.',
++    'لا تملك صلاحية تنفيذ هذه العملية.':
++        'You do not have permission to perform this action.',
++    'يجب تسجيل الدخول للمتابعة.': 'You must sign in to continue.',
++    'لا توجد جلسة مستخدم نشطة.': 'There is no active user session.',
++    'تتعارض العملية مع بيانات موجودة مسبقًا.':
++        'This action conflicts with existing data.',
++    'تم تجاوز عدد المحاولات المسموح. حاول لاحقًا.':
++        'Too many attempts. Please try again later.',
++    'أعاد الخادم استجابة غير صالحة.': 'The server returned an invalid response.',
++    'أعاد الخادم استجابة ليست كائن JSON.':
++        'The server response is not a JSON object.',
++    'تعذر التحقق من استجابة الخادم.':
++        'The server response could not be verified.',
++    'تعذر إكمال الطلب.': 'The request could not be completed.',
++    'تعذر إكمال العملية. حاول مرة أخرى.':
++        'The action could not be completed. Please try again.',
++    'تعذر إبلاغ الخادم، لكن تم إنهاء الجلسة محليًا.':
++        'The server could not be notified, but the local session was ended.',
++    'لم تتضمن استجابة الخادم بيانات المستخدم.':
++        'The server response did not include user data.',
++    'لم تتضمن استجابة الخادم حقل data صالحًا.':
++        'The server response did not include a valid data field.',
++    'لم تتضمن استجابة الخادم قائمة بيانات صالحة.':
++        'The server response did not include a valid data list.',
++    'أحد الملفات المحددة ليس صورة شكوى صالحة.':
++        'One of the selected files is not a valid complaint image.',
++    'اختر صورة واحدة على الأقل.': 'Select at least one image.',
++    'يمكن إرفاق 5 صور كحد أقصى.': 'You can attach up to 5 images.',
++    'يجب أن تكون صور الشكوى بصيغة JPG أو PNG.':
++        'Complaint images must be JPG or PNG.',
++    'يجب ألا يتجاوز حجم كل صورة شكوى 5 ميغابايت.':
++        'Each complaint image must not exceed 5 MB.',
++    'صيغة الصورة غير مدعومة. استخدم JPG أو PNG.':
++        'Unsupported image format. Use JPG or PNG.',
++    'يجب ألا يتجاوز حجم كل صورة 4 ميغابايت.':
++        'Each image must not exceed 4 MB.',
++    'يجب أن تكون صورة الهوية بصيغة JPG أو PNG.':
++        'ID images must be JPG or PNG.',
++    'يجب ألا يتجاوز حجم كل صورة هوية 4 ميغابايت.':
++        'Each ID image must not exceed 4 MB.',
++    'الملف المحدد ليس صورة هوية صالحة.':
++        'The selected file is not a valid ID image.',
++    'خدمة الموقع غير مفعّلة. فعّل GPS ثم حاول مجددًا.':
++        'Location services are disabled. Enable GPS and try again.',
++    'لم يتم منح إذن الموقع. يمكنك اختيار الموقع يدويًا من الخريطة.':
++        'Location permission was not granted. You can select the location manually.',
++    'إذن الموقع مرفوض نهائيًا. فعّله من إعدادات التطبيق أو اختر الموقع يدويًا.':
++        'Location permission is permanently denied. Enable it in app settings or select manually.',
++    'تعذر تثبيت موقعك بسرعة. اقترب من نافذة أو اختر الموقع يدويًا.':
++        'Your location could not be fixed quickly. Move near a window or select it manually.',
++    'تعذر تحديد موقعك الآن. حاول مجددًا أو اختر الموقع يدويًا.':
++        'Your location is unavailable. Try again or select it manually.',
++    'لم تتوفر أسماء للأماكن القريبة.': 'No nearby place names are available.',
++
++    // Backend category names returned in Arabic.
++    'الطرق والأرصفة': 'Roads and sidewalks',
++    'حفرة في الطريق': 'Road pothole',
++    'رصيف متضرر': 'Damaged sidewalk',
++    'إشارة مرور متضررة': 'Damaged traffic sign',
++    'تعدٍ على الطريق': 'Road encroachment',
++    'النظافة': 'Sanitation',
++    'تراكم النفايات': 'Waste accumulation',
++    'حاوية ممتلئة': 'Full waste container',
++    'حاوية متضررة': 'Damaged waste container',
++    'مكب نفايات عشوائي': 'Illegal dumping site',
++    'الإنارة': 'Street lighting',
++    'مصباح شارع معطل': 'Broken streetlight',
++    'عمود إنارة متضرر': 'Damaged lighting pole',
++    'انقطاع إنارة شارع': 'Street lighting outage',
++    'المياه والصرف الصحي': 'Water and sanitation',
++    'تسرب مياه': 'Water leak',
++    'انسداد صرف صحي': 'Sewer blockage',
++    'فيضان مياه صرف': 'Sewage overflow',
++    'الحدائق والمرافق العامة': 'Parks and public facilities',
++    'تلف ألعاب الحديقة': 'Damaged playground equipment',
++    'تلف مقاعد عامة': 'Damaged public seating',
++    'أشجار بحاجة إلى تقليم': 'Trees requiring pruning',
++    'بلدية كفرسوسة': 'Kafr Sousa Municipality',
++    'بلدية دمشق': 'Damascus Municipality',
++    'بلدية دوما': 'Douma Municipality',
++    'دمشق': 'Damascus',
++    'ريف دمشق': 'Rif Dimashq',
++  };
++}
++
++class _AppLocalizationsDelegate
++    extends LocalizationsDelegate<AppLocalizations> {
++  const _AppLocalizationsDelegate();
++
++  @override
++  bool isSupported(Locale locale) {
++    return locale.languageCode == 'ar' || locale.languageCode == 'en';
++  }
++
++  @override
++  Future<AppLocalizations> load(Locale locale) {
++    return SynchronousFuture<AppLocalizations>(AppLocalizations(locale));
++  }
++
++  @override
++  bool shouldReload(_AppLocalizationsDelegate old) => false;
++}
++
++extension AppLocalizationsBuildContext on BuildContext {
++  AppLocalizations get l10n => AppLocalizations.of(this);
++
++  String tr(String source) {
++    final localizations =
++        AppLocalizations.maybeOf(this) ?? const AppLocalizations(Locale('ar'));
++    return localizations.translate(source);
++  }
++}
+diff --git a/b/lib/l10n/localized_text.dart b/lib/l10n/localized_text.dart
+new file mode 100644
+index 0000000..2d9df3b
+--- /dev/null
++++ b/lib/l10n/localized_text.dart
+@@ -0,0 +1,133 @@
++import 'package:flutter/material.dart' as material;
++
++import 'app_localizations.dart';
++
++/// Drop-in localized counterpart for Flutter's [material.Text].
++///
++/// Existing Arabic UI copy remains the canonical lookup value. When English
++/// is selected it is resolved through [AppLocalizations], including nested
++/// [material.TextSpan] values used by rich text.
++class Text extends material.StatelessWidget {
++  const Text(
++    String this.data, {
++    super.key,
++    this.style,
++    this.strutStyle,
++    this.textAlign,
++    this.textDirection,
++    this.locale,
++    this.softWrap,
++    this.overflow,
++    this.textScaleFactor,
++    this.maxLines,
++    this.semanticsLabel,
++    this.textWidthBasis,
++    this.textHeightBehavior,
++    this.selectionColor,
++    this.translate = true,
++  }) : textSpan = null;
++
++  const Text.rich(
++    material.InlineSpan this.textSpan, {
++    super.key,
++    this.style,
++    this.strutStyle,
++    this.textAlign,
++    this.textDirection,
++    this.locale,
++    this.softWrap,
++    this.overflow,
++    this.textScaleFactor,
++    this.maxLines,
++    this.semanticsLabel,
++    this.textWidthBasis,
++    this.textHeightBehavior,
++    this.selectionColor,
++    this.translate = true,
++  }) : data = null;
++
++  final String? data;
++  final material.InlineSpan? textSpan;
++  final material.TextStyle? style;
++  final material.StrutStyle? strutStyle;
++  final material.TextAlign? textAlign;
++  final material.TextDirection? textDirection;
++  final material.Locale? locale;
++  final bool? softWrap;
++  final material.TextOverflow? overflow;
++  final double? textScaleFactor;
++  final int? maxLines;
++  final String? semanticsLabel;
++  final material.TextWidthBasis? textWidthBasis;
++  final material.TextHeightBehavior? textHeightBehavior;
++  final material.Color? selectionColor;
++  final bool translate;
++
++  @override
++  material.Widget build(material.BuildContext context) {
++    // Keep isolated widget tests and reusable widgets safe when they are
++    // mounted without the application's localization delegates.
++    final localizations =
++        AppLocalizations.maybeOf(context) ?? const AppLocalizations(material.Locale('ar'));
++    final value = data;
++    if (value != null) {
++      return material.Text(
++        translate ? localizations.translate(value) : value,
++        style: style,
++        strutStyle: strutStyle,
++        textAlign: textAlign,
++        textDirection: textDirection,
++        locale: locale,
++        softWrap: softWrap,
++        overflow: overflow,
++        textScaleFactor: textScaleFactor,
++        maxLines: maxLines,
++        semanticsLabel: semanticsLabel == null
++            ? null
++            : localizations.translate(semanticsLabel!),
++        textWidthBasis: textWidthBasis,
++        textHeightBehavior: textHeightBehavior,
++        selectionColor: selectionColor,
++      );
++    }
++
++    return material.Text.rich(
++      translate ? _translateSpan(localizations, textSpan!) : textSpan!,
++      style: style,
++      strutStyle: strutStyle,
++      textAlign: textAlign,
++      textDirection: textDirection,
++      locale: locale,
++      softWrap: softWrap,
++      overflow: overflow,
++      textScaleFactor: textScaleFactor,
++      maxLines: maxLines,
++      semanticsLabel: semanticsLabel == null
++          ? null
++          : localizations.translate(semanticsLabel!),
++      textWidthBasis: textWidthBasis,
++      textHeightBehavior: textHeightBehavior,
++      selectionColor: selectionColor,
++    );
++  }
++
++  static material.InlineSpan _translateSpan(
++    AppLocalizations localizations,
++    material.InlineSpan span,
++  ) {
++    if (span is! material.TextSpan) return span;
++    return material.TextSpan(
++      text: span.text == null ? null : localizations.translate(span.text!),
++      children: span.children
++          ?.map((child) => _translateSpan(localizations, child))
++          .toList(growable: false),
++      style: span.style,
++      recognizer: span.recognizer,
++      mouseCursor: span.mouseCursor,
++      onEnter: span.onEnter,
++      onExit: span.onExit,
++      semanticsLabel: span.semanticsLabel,
++      locale: span.locale,
++    );
++  }
++}
+diff --git a/lib/main.dart b/lib/main.dart
+index 1c8eb58..b56e702 100644
+--- a/lib/main.dart
++++ b/lib/main.dart
+@@ -1,6 +1,10 @@
+ import 'package:flutter/material.dart';
+ import 'app/app.dart';
++import 'l10n/app_locale_controller.dart';
+ 
+-void main() {
+-  runApp(const AppRoot());
++Future<void> main() async {
++  WidgetsFlutterBinding.ensureInitialized();
++  final localeController = AppLocaleController();
++  await localeController.load();
++  runApp(AppRoot(localeController: localeController));
+ }
+diff --git a/lib/shared/widgets/citizen_verification_notice.dart b/lib/shared/widgets/citizen_verification_notice.dart
+index 7b44e92..454f5b6 100644
+--- a/lib/shared/widgets/citizen_verification_notice.dart
++++ b/lib/shared/widgets/citizen_verification_notice.dart
+@@ -1,4 +1,5 @@
+-import 'package:flutter/material.dart';
++import 'package:flutter/material.dart' hide Text;
++import 'package:electronic_municipality/l10n/localized_text.dart';
+ 
+ import '../../app/theme/app_colors.dart';
+ import '../../core/repositories/auth_repository.dart';
+@@ -83,7 +84,7 @@ class CitizenVerificationNotice extends StatelessWidget {
+           ),
+           const SizedBox(height: 10),
+           Align(
+-            alignment: Alignment.centerRight,
++            alignment: AlignmentDirectional.centerStart,
+             child: TextButton.icon(
+               key: const ValueKey('citizen_verification_notice_action'),
+               onPressed: onAction,
+diff --git a/lib/shared/widgets/form_components.dart b/lib/shared/widgets/form_components.dart
+index ee99817..3e028af 100644
+--- a/lib/shared/widgets/form_components.dart
++++ b/lib/shared/widgets/form_components.dart
+@@ -1,4 +1,6 @@
+-import 'package:flutter/material.dart';
++import 'package:flutter/material.dart' hide Text;
++import 'package:electronic_municipality/l10n/localized_text.dart';
++import 'package:electronic_municipality/l10n/app_localizations.dart';
+ import '../../app/design_system.dart';
+ import '../../app/theme/app_colors.dart';
+ 
+@@ -258,6 +260,7 @@ class DocumentUploadArea extends StatelessWidget {
+               const SizedBox(height: AppSpacing.md),
+               Text(
+                 uploadedFileName!,
++                translate: false,
+                 style: const TextStyle(
+                   fontSize: 12,
+                   color: AppColors.success,
+@@ -453,14 +456,17 @@ class _AppTextFieldState extends State<AppTextField> {
+     return TextFormField(
+       controller: widget.controller,
+       focusNode: _focusNode,
+-      validator: widget.validator,
++      validator: (value) {
++        final error = widget.validator?.call(value);
++        return error == null ? null : context.tr(error);
++      },
+       onChanged: widget.onChanged,
+       obscureText: widget.obscureText,
+       maxLines: widget.obscureText ? 1 : widget.maxLines,
+-      textDirection: TextDirection.rtl,
++      textDirection: Directionality.of(context),
+       decoration: InputDecoration(
+-        labelText: widget.label,
+-        hintText: widget.hint,
++        labelText: context.tr(widget.label),
++        hintText: widget.hint == null ? null : context.tr(widget.hint!),
+         prefixIcon: widget.prefixIcon != null ? Icon(widget.prefixIcon) : null,
+         suffixIcon: widget.suffixIcon != null ? Icon(widget.suffixIcon) : null,
+         border: OutlineInputBorder(
+@@ -516,13 +522,16 @@ class _PasswordFieldState extends State<PasswordField> {
+     return TextFormField(
+       controller: widget.controller,
+       focusNode: _focusNode,
+-      validator: widget.validator,
++      validator: (value) {
++        final error = widget.validator?.call(value);
++        return error == null ? null : context.tr(error);
++      },
+       onChanged: widget.onChanged,
+       obscureText: _obscureText,
+-      textDirection: TextDirection.rtl,
++      textDirection: Directionality.of(context),
+       decoration: InputDecoration(
+-        labelText: 'كلمة المرور',
+-        hintText: 'أدخل كلمة المرور',
++        labelText: context.tr('كلمة المرور'),
++        hintText: context.tr('أدخل كلمة المرور'),
+         prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary),
+         suffixIcon: IconButton(
+           icon: Icon(
+diff --git a/lib/shared/widgets/municipality_widgets.dart b/lib/shared/widgets/municipality_widgets.dart
+index ef3254e..0ec9b29 100644
+--- a/lib/shared/widgets/municipality_widgets.dart
++++ b/lib/shared/widgets/municipality_widgets.dart
+@@ -1,6 +1,8 @@
+ import 'dart:ui' as ui;
+ 
+-import 'package:flutter/material.dart';
++import 'package:flutter/material.dart' hide Text;
++import 'package:electronic_municipality/l10n/localized_text.dart';
++import 'package:electronic_municipality/l10n/app_localizations.dart';
+ import '../../app/design_system.dart';
+ import '../../app/theme/app_colors.dart';
+ import '../../core/constants/app_assets.dart';
+@@ -41,12 +43,12 @@ class MunicipalityTextField extends StatelessWidget {
+           const SizedBox(height: 8),
+         ],
+         TextField(
+-          textDirection: TextDirection.rtl,
++          textDirection: Directionality.of(context),
+           obscureText: obscureText,
+           maxLines: maxLines,
+           minLines: maxLines,
+           decoration: InputDecoration(
+-            hintText: hint,
++            hintText: context.tr(hint),
+             hintStyle: const TextStyle(color: Color(0xFF9B9D9A)),
+             filled: true,
+             fillColor: AppColors.surface,
+@@ -588,11 +590,13 @@ class ReadonlyField extends StatelessWidget {
+       {super.key,
+       required this.label,
+       required this.value,
+-      this.dropdown = false});
++      this.dropdown = false,
++      this.translateValue = false});
+ 
+   final String label;
+   final String value;
+   final bool dropdown;
++  final bool translateValue;
+ 
+   @override
+   Widget build(BuildContext context) {
+@@ -612,6 +616,7 @@ class ReadonlyField extends StatelessWidget {
+             const Icon(Icons.keyboard_arrow_down, color: AppColors.muted),
+           Expanded(
+               child: Text(value,
++                  translate: translateValue,
+                   textAlign: TextAlign.end,
+                   style:
+                       const TextStyle(color: AppColors.muted, fontSize: 14))),
+diff --git a/lib/shared/widgets/otp_input.dart b/lib/shared/widgets/otp_input.dart
+index ef77d4b..dde78e4 100644
+--- a/lib/shared/widgets/otp_input.dart
++++ b/lib/shared/widgets/otp_input.dart
+@@ -1,4 +1,6 @@
+-import 'package:flutter/material.dart';
++import 'package:flutter/material.dart' hide Text;
++import 'package:electronic_municipality/l10n/localized_text.dart';
++import 'package:electronic_municipality/l10n/app_localizations.dart';
+ import 'package:flutter/services.dart';
+ 
+ import '../../app/theme/app_colors.dart';
+@@ -69,7 +71,9 @@ class _OtpInputState extends State<OtpInput> {
+         final activeIndex = code.length.clamp(0, widget.length - 1);
+ 
+         return Semantics(
+-          label: 'رمز التحقق المكون من ${widget.length} أرقام',
++          label: context.tr(
++            'رمز التحقق المكون من ${widget.length} أرقام',
++          ),
+           textField: true,
+           child: GestureDetector(
+             behavior: HitTestBehavior.opaque,
+@@ -108,6 +112,7 @@ class _OtpInputState extends State<OtpInput> {
+                             ),
+                             child: Text(
+                               index < code.length ? code[index] : '',
++                              translate: false,
+                               style: widget.textStyle ??
+                                   const TextStyle(
+                                     color: AppColors.text,
+diff --git a/pubspec.yaml b/pubspec.yaml
+index 90a4bbd..9efe5aa 100644
+--- a/pubspec.yaml
++++ b/pubspec.yaml
+@@ -30,6 +30,8 @@ environment:
+ dependencies:
+   flutter:
+     sdk: flutter
++  flutter_localizations:
++    sdk: flutter
+ 
+ 
+   # The following adds the Cupertino Icons font to your application.
+diff --git a/test/features/complaints/complaint_contract_test.dart b/test/features/complaints/complaint_contract_test.dart
+index 10d4f54..2a242f2 100644
+--- a/test/features/complaints/complaint_contract_test.dart
++++ b/test/features/complaints/complaint_contract_test.dart
+@@ -3,6 +3,7 @@ import 'dart:typed_data';
+ import 'package:dio/dio.dart';
+ import 'package:flutter_test/flutter_test.dart';
+ 
++import 'package:electronic_municipality/core/config/api_config.dart';
+ import 'package:electronic_municipality/core/network/api_exception.dart';
+ import 'package:electronic_municipality/features/complaints/data/complaint_endpoints.dart';
+ import 'package:electronic_municipality/features/complaints/data/models/complaint_models.dart';
+@@ -127,6 +128,86 @@ void main() {
+     );
+   });
+ 
++  test('report model matches the complete citizen complaints response item', () {
++    final report = ComplaintReport.fromJson(
++      <String, dynamic>{
++        'id': 34,
++        'complaint_id': null,
++        'title': 'عمود إنارة',
++        'description': 'العمود متضرر ويحتاج إلى صيانة',
++        'text_location': 'قرب الحديقة العامة',
++        'latitude': '33.4728700',
++        'longitude': '36.2497910',
++        'municipality': <String, dynamic>{
++          'id': 1,
++          'name': 'بلدية كفرسوسة',
++        },
++        'category': <String, dynamic>{
++          'id': 13,
++          'name': 'عمود إنارة متضرر',
++          'parent_id': 11,
++        },
++        'status': <String, dynamic>{
++          'id': 2,
++          'key': 'submitted',
++          'name': 'تم الإرسال',
++          'is_terminal': false,
++        },
++        'images': <Map<String, dynamic>>[
++          <String, dynamic>{
++            'id': 5,
++            'original_name': 'scaled_125865.jpg',
++            'mime_type': 'image/jpeg',
++            'file_size': 149020,
++            'view_url':
++                'http://localhost/storage/complaint-reports/34/image.jpg',
++          },
++        ],
++        'reporters_count': null,
++        'is_linked': false,
++        'can_edit': false,
++        'submitted_at': '2026-08-14T15:45:23.000000Z',
++        'linked_at': null,
++        'created_at': '2026-08-14T15:45:21.000000Z',
++        'updated_at': '2026-08-14T15:45:23.000000Z',
++      },
++    );
++
++    expect(report.id, 34);
++    expect(report.municipalityId, 1);
++    expect(report.municipalityName, 'بلدية كفرسوسة');
++    expect(report.categoryId, 13);
++    expect(report.category?.parentId, 11);
++    expect(report.status.id, 2);
++    expect(report.status.label, 'تم الإرسال');
++    expect(report.status.isTerminal, isFalse);
++    expect(report.canEdit, isFalse);
++    expect(report.isLinked, isFalse);
++    expect(report.submittedAt, DateTime.parse('2026-08-14T15:45:23Z'));
++    expect(report.images.single.name, 'scaled_125865.jpg');
++    expect(report.images.single.mimeType, 'image/jpeg');
++    expect(report.images.single.fileSize, 149020);
++
++    final imageUri = Uri.parse(report.images.single.url);
++    final apiUri = Uri.parse(ApiConfig.normalizedBaseUrl);
++    expect(imageUri.host, apiUri.host);
++    expect(imageUri.port, apiUri.port);
++    expect(imageUri.path, '/storage/complaint-reports/34/image.jpg');
++  });
++
++  test('server URL resolver accepts markdown-wrapped image URLs', () {
++    final url = ApiConfig.resolveServerUrl(
++      '[http://localhost/storage/image.jpg]'
++      '(http://localhost/storage/image.jpg)',
++    );
++    final resolved = Uri.parse(url);
++    final api = Uri.parse(ApiConfig.normalizedBaseUrl);
++
++    expect(resolved.host, api.host);
++    expect(resolved.port, api.port);
++    expect(resolved.path, '/storage/image.jpg');
++  });
++
+   test('draft status is fallback when can_edit is absent', () {
+     final report = ComplaintReport.fromJson(
+       <String, dynamic>{
+diff --git a/test/features/complaints/complaint_location_picker_screen_test.dart b/test/features/complaints/complaint_location_picker_screen_test.dart
+index 3c13f64..ec1bea4 100644
+--- a/test/features/complaints/complaint_location_picker_screen_test.dart
++++ b/test/features/complaints/complaint_location_picker_screen_test.dart
+@@ -88,7 +88,10 @@ class _PlaceResolverFake implements ComplaintPlaceResolver {
+   int calls = 0;
+ 
+   @override
+-  Future<ComplaintPlace?> resolve(ComplaintLocation location) async {
++  Future<ComplaintPlace?> resolve(
++    ComplaintLocation location, {
++    String localeIdentifier = 'ar_SY',
++  }) async {
+     calls++;
+     return const ComplaintPlace(
+       title: 'شارع الثورة',
+diff --git a/test/features/complaints/complaints_screen_test.dart b/test/features/complaints/complaints_screen_test.dart
+index b037352..90fd344 100644
+--- a/test/features/complaints/complaints_screen_test.dart
++++ b/test/features/complaints/complaints_screen_test.dart
+@@ -171,6 +171,65 @@ void main() {
+       findsOneWidget,
+     );
+   });
++
++  testWidgets('opens complaint details and displays its attached images', (
++    WidgetTester tester,
++  ) async {
++    final repository = _ComplaintsHistoryRepositoryFake();
++    const verifiedCitizen = AuthUser(
++      id: 9,
++      fullName: 'مواطن موثق',
++      email: 'verified@example.sy',
++      phoneNumber: '0990000000',
++      roles: <String>['citizen'],
++      accountType: 'citizen',
++      citizenProfile: <String, dynamic>{
++        'is_verified': true,
++        'municipality_id': 1,
++      },
++    );
++    await tester.binding.setSurfaceSize(const Size(800, 1200));
++    addTearDown(() => tester.binding.setSurfaceSize(null));
++
++    await tester.pumpWidget(
++      MaterialApp(
++        home: Scaffold(
++          body: ComplaintsScreen(
++            repository: repository,
++            authRepository: AuthRepositoryFake(
++              currentUser: verifiedCitizen,
++            ),
++            municipalityId: 1,
++          ),
++        ),
++      ),
++    );
++    await tester.pumpAndSettle();
++
++    await tester.tap(find.text('سجل الشكاوى'));
++    await tester.pumpAndSettle();
++    expect(
++      find.byKey(const ValueKey('open_complaint_34')),
++      findsOneWidget,
++    );
++
++    await tester.tap(find.byKey(const ValueKey('open_complaint_34')));
++    await tester.pumpAndSettle();
++
++    expect(repository.getReportCalls, 1);
++    expect(
++      find.byKey(const ValueKey('complaint_details_screen')),
++      findsOneWidget,
++    );
++    expect(find.text('تفاصيل الشكوى'), findsOneWidget);
++    expect(find.text('عمود إنارة متضرر'), findsWidgets);
++    expect(find.text('بلدية كفرسوسة'), findsOneWidget);
++    expect(find.text('scaled_125865.jpg'), findsOneWidget);
++    expect(
++      find.byKey(const ValueKey('complaint_image_5')),
++      findsOneWidget,
++    );
++  });
+ }
+ 
+ class _ComplaintsRepositoryFake implements ComplaintsRepository {
+@@ -295,3 +354,99 @@ class _ComplaintsRepositoryFake implements ComplaintsRepository {
+     mutations.add('delete-image:${report.id}:$imageId');
+   }
+ }
++
++class _ComplaintsHistoryRepositoryFake implements ComplaintsRepository {
++  int getReportCalls = 0;
++
++  static final ComplaintReport report = ComplaintReport(
++    id: 34,
++    status: const ComplaintStatus(
++      id: 2,
++      key: 'submitted',
++      label: 'تم الإرسال',
++      isTerminal: false,
++    ),
++    images: const <ComplaintImage>[
++      ComplaintImage(
++        id: 5,
++        url: 'https://example.invalid/complaint-image.jpg',
++        name: 'scaled_125865.jpg',
++        mimeType: 'image/jpeg',
++        fileSize: 149020,
++      ),
++    ],
++    municipalityId: 1,
++    municipalityName: 'بلدية كفرسوسة',
++    categoryId: 13,
++    category: const ComplaintCategory(
++      id: 13,
++      parentId: 11,
++      name: 'عمود إنارة متضرر',
++    ),
++    title: 'بلاغ عمود إنارة',
++    description: 'العمود متضرر ويحتاج إلى صيانة.',
++    textLocation: 'قرب الحديقة العامة',
++    latitude: 33.47287,
++    longitude: 36.249791,
++    serverCanEdit: false,
++    isLinked: false,
++    submittedAt: DateTime.utc(2026, 8, 14, 15, 45, 23),
++    createdAt: DateTime.utc(2026, 8, 14, 15, 45, 21),
++    updatedAt: DateTime.utc(2026, 8, 14, 15, 45, 23),
++  );
++
++  @override
++  Future<List<ComplaintCategory>> getCategories() async {
++    return const <ComplaintCategory>[];
++  }
++
++  @override
++  Future<List<ComplaintReport>> getReports() async {
++    return <ComplaintReport>[report];
++  }
++
++  @override
++  Future<ComplaintReport> getReport(int reportId) async {
++    getReportCalls++;
++    return report;
++  }
++
++  @override
++  Future<ComplaintReport> createDraft(ComplaintDraftInput input) {
++    throw UnsupportedError('Not used by this test.');
++  }
++
++  @override
++  Future<ComplaintReport> updateDraft({
++    required ComplaintReport report,
++    required ComplaintDraftInput input,
++  }) {
++    throw UnsupportedError('Not used by this test.');
++  }
++
++  @override
++  Future<void> uploadImages({
++    required ComplaintReport report,
++    required List<ComplaintAttachment> images,
++  }) {
++    throw UnsupportedError('Not used by this test.');
++  }
++
++  @override
++  Future<void> deleteImage({
++    required ComplaintReport report,
++    required int imageId,
++  }) {
++    throw UnsupportedError('Not used by this test.');
++  }
++
++  @override
++  Future<void> deleteDraft(ComplaintReport report) {
++    throw UnsupportedError('Not used by this test.');
++  }
++
++  @override
++  Future<ComplaintReport> submitDraft(ComplaintReport report) {
++    throw UnsupportedError('Not used by this test.');
++  }
++}
+diff --git a/b/test/features/settings/settings_language_test.dart b/test/features/settings/settings_language_test.dart
+new file mode 100644
+index 0000000..a91d785
+--- /dev/null
++++ b/test/features/settings/settings_language_test.dart
+@@ -0,0 +1,114 @@
++import 'package:flutter/material.dart';
++import 'package:flutter_localizations/flutter_localizations.dart';
++import 'package:flutter_test/flutter_test.dart';
++
++import 'package:electronic_municipality/features/settings/presentation/screens/settings_screen.dart';
++import 'package:electronic_municipality/l10n/app_locale_controller.dart';
++import 'package:electronic_municipality/l10n/app_localizations.dart';
++
++void main() {
++  test('loads and persists the selected language', () async {
++    final store = MemoryAppLocaleStore();
++    final controller = AppLocaleController(store: store);
++
++    await controller.load();
++    expect(controller.locale, AppLocaleController.arabicLocale);
++
++    await controller.setLocale(AppLocaleController.englishLocale);
++    expect(store.languageCode, 'en');
++
++    final restored = AppLocaleController(store: store);
++    await restored.load();
++    expect(restored.locale, AppLocaleController.englishLocale);
++  });
++
++  testWidgets('changes the whole settings screen between Arabic and English',
++      (tester) async {
++    await tester.binding.setSurfaceSize(const Size(800, 1200));
++    addTearDown(() => tester.binding.setSurfaceSize(null));
++
++    final store = MemoryAppLocaleStore();
++    final controller = AppLocaleController(store: store);
++    await controller.load();
++
++    await tester.pumpWidget(_LanguageHarness(controller: controller));
++    await tester.pumpAndSettle();
++
++    expect(find.text('الإعدادات'), findsOneWidget);
++    expect(
++      Directionality.of(tester.element(find.text('الإعدادات'))),
++      TextDirection.rtl,
++    );
++
++    await tester.tap(find.byKey(const ValueKey('settings_language_tile')));
++    await tester.pumpAndSettle();
++    expect(find.text('اختيار اللغة'), findsOneWidget);
++
++    await tester.tap(find.byKey(const ValueKey('select_english_language')));
++    await tester.pumpAndSettle();
++
++    expect(find.text('Settings'), findsOneWidget);
++    expect(find.text('Language'), findsOneWidget);
++    expect(find.text('English'), findsOneWidget);
++    expect(
++      Directionality.of(tester.element(find.text('Settings'))),
++      TextDirection.ltr,
++    );
++    expect(store.languageCode, 'en');
++
++    await tester.tap(find.byKey(const ValueKey('settings_language_tile')));
++    await tester.pumpAndSettle();
++    await tester.tap(find.byKey(const ValueKey('select_arabic_language')));
++    await tester.pumpAndSettle();
++
++    expect(find.text('الإعدادات'), findsOneWidget);
++    expect(store.languageCode, 'ar');
++  });
++
++  test('translates dynamic complaint and validation messages', () {
++    const english = AppLocalizations(Locale('en'));
++
++    expect(english.translate('شكوى #34'), 'Complaint #34');
++    expect(
++      english.translate('حقل العنوان مطلوب.'),
++      'Title is required.',
++    );
++    expect(
++      english.translate(
++        'حساب المواطن غير موثق. يجب توثيق الحساب قبل إرسال الشكوى.',
++      ),
++      'Your citizen account is not verified. Verify it before submitting a complaint.',
++    );
++  });
++}
++
++class _LanguageHarness extends StatelessWidget {
++  const _LanguageHarness({required this.controller});
++
++  final AppLocaleController controller;
++
++  @override
++  Widget build(BuildContext context) {
++    return AnimatedBuilder(
++      animation: controller,
++      builder: (context, _) => AppLocaleScope(
++        controller: controller,
++        child: MaterialApp(
++          locale: controller.locale,
++          supportedLocales: AppLocaleController.supportedLocales,
++          localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
++            AppLocalizations.delegate,
++            GlobalMaterialLocalizations.delegate,
++            GlobalCupertinoLocalizations.delegate,
++            GlobalWidgetsLocalizations.delegate,
++          ],
++          home: Scaffold(
++            body: SettingsScreen(onOpenProfile: _ignore),
++          ),
++        ),
++      ),
++    );
++  }
++
++  static void _ignore() {}
++}

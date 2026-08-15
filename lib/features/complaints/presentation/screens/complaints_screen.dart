@@ -10,6 +10,7 @@ import '../../../../shared/widgets/citizen_verification_notice.dart';
 import '../../../../shared/widgets/municipality_widgets.dart';
 import '../../data/models/complaint_models.dart';
 import '../../domain/complaints_repository.dart';
+import 'complaint_details_screen.dart';
 import 'complaint_location_picker_screen.dart';
 
 typedef ComplaintImagePicker = Future<List<ComplaintAttachment>> Function();
@@ -346,6 +347,18 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
     }
   }
 
+  Future<void> _openDetails(ComplaintReport report) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => ComplaintDetailsScreen(
+          summary: report,
+          repository: _repository,
+        ),
+      ),
+    );
+    if (mounted) await _refreshReports();
+  }
+
   Future<void> _deleteDraft(ComplaintReport report) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -568,8 +581,9 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
               .map((item) =>
                   DropdownMenuItem(value: item.id, child: Text(item.name)))
               .toList(),
-          onChanged:
-              canEdit && !_busy && !_loading ? _selectCategoryGroup : null,
+          onChanged: canEdit && !_busy && !_loading
+              ? _selectCategoryGroup
+              : null,
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<int>(
@@ -580,14 +594,19 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
           isExpanded: true,
           decoration: _decoration(
             'نوع الشكوى',
-            _categoryGroupId == null ? 'اختر المجال أولًا' : 'اختر نوع المشكلة',
+            _categoryGroupId == null
+                ? 'اختر المجال أولًا'
+                : 'اختر نوع المشكلة',
             _errorFor('category_id'),
           ),
           items: _selectedCategoryTypes
               .map((item) =>
                   DropdownMenuItem(value: item.id, child: Text(item.name)))
               .toList(),
-          onChanged: canEdit && !_busy && !_loading && _categoryGroupId != null
+          onChanged: canEdit &&
+                  !_busy &&
+                  !_loading &&
+                  _categoryGroupId != null
               ? _selectCategory
               : null,
         ),
@@ -734,6 +753,7 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
           for (var index = 0; index < _reports.length; index++) ...[
             _ComplaintTile(
               report: _reports[index],
+              onOpen: () => _openDetails(_reports[index]),
               onEdit:
                   _reports[index].canEdit ? () => _edit(_reports[index]) : null,
               onDelete: _reports[index].canEdit
@@ -748,55 +768,102 @@ class _ComplaintsScreenState extends State<ComplaintsScreen> {
 }
 
 class _ComplaintTile extends StatelessWidget {
-  const _ComplaintTile({required this.report, this.onEdit, this.onDelete});
+  const _ComplaintTile({
+    required this.report,
+    required this.onOpen,
+    this.onEdit,
+    this.onDelete,
+  });
   final ComplaintReport report;
+  final VoidCallback onOpen;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-          color: AppColors.surfaceMuted,
-          borderRadius: BorderRadius.circular(10)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Expanded(
-              child: Text(report.title ?? 'شكوى #${report.id}',
-                  style: const TextStyle(fontWeight: FontWeight.w800))),
-          StatusPill(
-              label: report.status.label,
-              color: _statusColor(report.status.key),
-              pale: true),
-        ]),
-        if (report.description != null) ...[
-          const SizedBox(height: 7),
-          Text(report.description!,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: AppColors.muted)),
-        ],
-        const SizedBox(height: 6),
-        Row(children: [
-          Text('#${report.id}',
-              style: const TextStyle(color: AppColors.subtle)),
-          const Spacer(),
-          if (onEdit != null)
-            TextButton.icon(
-              key: ValueKey('edit_complaint_${report.id}'),
-              onPressed: onEdit,
-              icon: const Icon(Icons.edit_outlined, size: 18),
-              label: const Text('تعديل'),
-            ),
-          if (onDelete != null)
-            IconButton(
-              key: ValueKey('delete_complaint_${report.id}'),
-              onPressed: onDelete,
-              icon: const Icon(Icons.delete_outline, color: AppColors.danger),
-            ),
-        ]),
-      ]),
+    return Material(
+      color: AppColors.surfaceMuted,
+      borderRadius: BorderRadius.circular(10),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        key: ValueKey('open_complaint_${report.id}'),
+        onTap: onOpen,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      report.title ?? 'شكوى #${report.id}',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  StatusPill(
+                    label: report.status.label,
+                    color: _statusColor(report.status.key),
+                    pale: true,
+                  ),
+                ],
+              ),
+              if (report.description != null) ...[
+                const SizedBox(height: 7),
+                Text(
+                  report.description!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.muted),
+                ),
+              ],
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Text(
+                    '#${report.id}',
+                    style: const TextStyle(color: AppColors.subtle),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(
+                    Icons.photo_library_outlined,
+                    size: 16,
+                    color: AppColors.subtle,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${report.images.length}',
+                    style: const TextStyle(color: AppColors.subtle),
+                  ),
+                  const Spacer(),
+                  if (onEdit != null)
+                    TextButton.icon(
+                      key: ValueKey('edit_complaint_${report.id}'),
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      label: const Text('تعديل'),
+                    ),
+                  if (onDelete != null)
+                    IconButton(
+                      key: ValueKey('delete_complaint_${report.id}'),
+                      onPressed: onDelete,
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        color: AppColors.danger,
+                      ),
+                    ),
+                  const SizedBox(width: 2),
+                  const Icon(
+                    Icons.chevron_left_rounded,
+                    color: AppColors.primary,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -864,8 +931,9 @@ class _LocationField extends StatelessWidget {
                           ? 'تم تحديد الموقع بنجاح'
                           : 'اضغط لاختيار الموقع الدقيق',
                       style: TextStyle(
-                        color:
-                            hasLocation ? AppColors.success : AppColors.muted,
+                        color: hasLocation
+                            ? AppColors.success
+                            : AppColors.muted,
                         fontSize: 12.5,
                       ),
                     ),

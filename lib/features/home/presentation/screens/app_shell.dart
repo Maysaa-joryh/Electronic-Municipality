@@ -54,6 +54,16 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _openNotificationCenter() async {
+    try {
+      await DI.pushNotifications.start();
+    } catch (error, stackTrace) {
+      // The local centre remains available even if FCM is temporarily
+      // unavailable. The service writes full diagnostics for investigation.
+      debugPrint('PUSH NOTIFICATION BELL START ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+
+    if (!mounted) return;
     await showDialog<void>(
       context: context,
       barrierDismissible: true,

@@ -271,11 +271,14 @@ class PushNotificationService {
   Future<void> _startService() async {
     try {
       await FirebaseBootstrap.ensureInitialized();
+      debugPrint('FCM START: Firebase is ready.');
+
       await _ensureInboxLoaded();
       await _initializeLocalNotifications();
-      await _requestPermission();
-      await _syncCurrentToken();
 
+      // Attach all message listeners before token registration. A temporary
+      // backend/API failure must never disable reception of an already valid
+      // FCM token for the current app session.
       _tokenRefreshSubscription = _firebaseMessaging.onTokenRefresh.listen(
         (token) => unawaited(_registerTokenSafely(token)),
         onError: (Object error, StackTrace stackTrace) {
@@ -298,6 +301,19 @@ class PushNotificationService {
         },
       );
 
+      final settings = await _requestPermission();
+      final permissionGranted = _isPermissionGranted(settings);
+      debugPrint(
+        'FCM PERMISSION: ${settings.authorizationStatus} '
+        '(granted=$permissionGranted).',
+      );
+
+      if (permissionGranted) {
+        await _syncCurrentToken();
+      } else {
+        debugPrint('FCM TOKEN SYNC SKIPPED: notification permission is not granted.');
+      }
+
       final initialMessage = await _firebaseMessaging.getInitialMessage();
       if (initialMessage != null) {
         await _recordRemoteMessage(initialMessage);
@@ -305,6 +321,7 @@ class PushNotificationService {
       }
 
       _started = true;
+      debugPrint('FCM STARTED: foreground and notification-open listeners are active.');
     } catch (_) {
       await _cancelMessageSubscriptions();
       rethrow;
@@ -344,6 +361,12 @@ class PushNotificationService {
   }
 
   Future<void> _syncCurrentToken() async {
+    // Explicitly keep automatic token generation enabled. The setting is
+    // persistent on Android, so this also repairs devices that were disabled
+    // during a previous development test.
+    await _firebaseMessaging.setAutoInitEnabled(true);
+    debugPrint('FCM TOKEN SYNC: requesting the current device token.');
+
     final token = await _firebaseMessaging.getToken();
     if (token == null || token.trim().isEmpty) {
       debugPrint('FCM TOKEN UNAVAILABLE: token was empty.');
@@ -405,6 +428,7 @@ class PushNotificationService {
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
     final content = await _recordRemoteMessage(message);
     _foregroundController.add(content);
+    debugPrint('FCM FOREGROUND MESSAGE: ${message.messageId ?? 'without-id'}');
 
     const details = NotificationDetails(
       android: AndroidNotificationDetails(
@@ -413,6 +437,8 @@ class PushNotificationService {
         channelDescription: _channelDescription,
         importance: Importance.high,
         priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
         icon: '@mipmap/ic_launcher',
       ),
       iOS: DarwinNotificationDetails(
@@ -421,13 +447,21 @@ class PushNotificationService {
         presentSound: true,
       ),
     );
-    await _localNotifications.show(
-      DateTime.now().millisecondsSinceEpoch.remainder(1 << 31),
-      content.title,
-      content.body,
-      details,
-      payload: content.intent?.toPayload(),
-    );
+    try {
+      await _localNotifications.show(
+        DateTime.now().millisecondsSinceEpoch.remainder(1 << 31),
+        content.title,
+        content.body,
+        details,
+        payload: content.intent?.toPayload(),
+      );
+    } catch (error, stackTrace) {
+      // Inbox persistence and its unread badge have already succeeded above.
+      // A device-specific system-notification failure must not discard the
+      // received municipal update.
+      debugPrint('FCM LOCAL NOTIFICATION DISPLAY ERROR: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
   }
 
   Future<void> _emitOpenedIntent(RemoteMessage message) async {

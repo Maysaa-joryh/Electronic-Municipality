@@ -72,6 +72,54 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
+class _NotificationCountBadge extends StatelessWidget {
+  const _NotificationCountBadge({required this.count, required this.child});
+
+  final int count;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (count <= 0) return child;
+
+    final label = count > 99 ? '99+' : count.toString();
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        child,
+        PositionedDirectional(
+          top: -8,
+          end: -10,
+          child: Semantics(
+            label: '${context.tr('إشعارات غير مقروءة')}: $count',
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFC3392A),
+                border: Border.all(color: AppColors.background, width: 1.5),
+                borderRadius: BorderRadius.circular(99),
+              ),
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                ),
+                textDirection: TextDirection.ltr,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class HomeTopBar extends StatelessWidget {
   const HomeTopBar({
     super.key,
@@ -104,7 +152,9 @@ class HomeTopBar extends StatelessWidget {
               icon: ValueListenableBuilder<List<PushInboxItem>>(
                 valueListenable: DI.pushNotifications.inbox,
                 builder: (context, items, _) {
-                  final hasUnread = items.any((item) => !item.isRead);
+                  final unreadCount =
+                      items.where((item) => !item.isRead).length;
+                  final hasUnread = unreadCount > 0;
                   final icon = Icon(
                     hasUnread
                         ? Icons.notifications_active_rounded
@@ -112,7 +162,10 @@ class HomeTopBar extends StatelessWidget {
                     color: hasUnread ? _homeDeepGreen : _homeMutedText,
                     size: 26,
                   );
-                  return hasUnread ? BadgeDot(child: icon) : icon;
+                  return _NotificationCountBadge(
+                    count: unreadCount,
+                    child: icon,
+                  );
                 },
               ),
             ),

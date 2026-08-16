@@ -8,6 +8,8 @@ class TokenStorage {
   static const String _tokenKey = 'auth.sanctum_token';
   static const String _requiresPasswordChangeKey =
       'auth.requires_password_change';
+  static const String _pendingAccountConfirmationContactKey =
+      'auth.pending_account_confirmation_contact';
 
   final FlutterSecureStorage _secureStorage;
 
@@ -32,6 +34,33 @@ class TokenStorage {
 
   Future<bool> requiresPasswordChange() async {
     return await _secureStorage.read(key: _requiresPasswordChangeKey) == 'true';
+  }
+
+  Future<String?> readPendingAccountConfirmationContact() async {
+    final contact = await _secureStorage.read(
+      key: _pendingAccountConfirmationContactKey,
+    );
+    final normalized = contact?.trim();
+    return normalized == null || normalized.isEmpty ? null : normalized;
+  }
+
+  Future<void> writePendingAccountConfirmationContact(String contact) async {
+    final normalized = contact.trim();
+    if (normalized.isEmpty) {
+      throw ArgumentError.value(
+        contact,
+        'contact',
+        'Pending account-confirmation contact must not be empty.',
+      );
+    }
+    await _secureStorage.write(
+      key: _pendingAccountConfirmationContactKey,
+      value: normalized,
+    );
+  }
+
+  Future<void> clearPendingAccountConfirmationContact() async {
+    await _secureStorage.delete(key: _pendingAccountConfirmationContactKey);
   }
 
   Future<void> writeSession({

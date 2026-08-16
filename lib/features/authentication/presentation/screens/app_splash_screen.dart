@@ -46,6 +46,23 @@ class _AppSplashScreenState extends State<AppSplashScreen>
       debugPrintStack(stackTrace: stackTrace);
     }
 
+    var shellArguments = const AppShellRouteArguments();
+    if (destination == AuthStartupDestination.authenticated) {
+      try {
+        await DI.pushNotifications.start();
+        final intent = DI.pushNotifications.takeInitialIntent();
+        if (intent?.opensServiceRequest == true && intent?.entityId != null) {
+          shellArguments = AppShellRouteArguments(
+            initialIndex: 3,
+            serviceRequestId: intent!.entityId,
+          );
+        }
+      } catch (error, stackTrace) {
+        debugPrint('PUSH NOTIFICATION START ERROR: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
+    }
+
     if (!mounted) return;
 
     final route = switch (destination) {
@@ -55,7 +72,12 @@ class _AppSplashScreenState extends State<AppSplashScreen>
       AuthStartupDestination.login => AppRoutes.login,
     };
 
-    Navigator.of(context).pushReplacementNamed(route);
+    Navigator.of(context).pushReplacementNamed(
+      route,
+      arguments: destination == AuthStartupDestination.authenticated
+          ? shellArguments
+          : null,
+    );
   }
 
   @override

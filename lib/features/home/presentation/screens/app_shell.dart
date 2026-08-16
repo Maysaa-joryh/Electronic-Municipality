@@ -2,17 +2,24 @@ import 'package:flutter/material.dart' hide Text;
 import 'package:electronic_municipality/l10n/localized_text.dart';
 import 'package:electronic_municipality/l10n/app_localizations.dart';
 import '../../../../app/router.dart';
+import '../../../../core/di.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../complaints/presentation/screens/complaints_screen.dart';
 import '../../../home/presentation/screens/home_screen.dart';
 import '../../../news/presentation/screens/news_screen.dart';
 import '../../../settings/presentation/screens/settings_screen.dart';
+import '../../../transactions/presentation/screens/service_request_details_screen.dart';
 import '../../../transactions/presentation/screens/transactions_screen.dart';
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key, this.initialIndex = 0});
+  const AppShell({
+    super.key,
+    this.initialIndex = 2,
+    this.initialServiceRequestId,
+  });
 
   final int initialIndex;
+  final int? initialServiceRequestId;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -20,6 +27,25 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   late int _index = widget.initialIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    final requestId = widget.initialServiceRequestId;
+    if (requestId == null) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ServiceRequestDetailsScreen(
+            requestId: requestId,
+            repository: DI.serviceRequests,
+          ),
+        ),
+      );
+    });
+  }
 
   void _openProfile() {
     Navigator.of(context).pushNamed(AppRoutes.profile);
@@ -80,20 +106,20 @@ class _AppShellState extends State<AppShell> {
   Widget _buildPage(int index) {
     switch (index) {
       case 0:
+        return SettingsScreen(onOpenProfile: _openProfile);
+      case 1:
+        return const ComplaintsScreen();
+      case 2:
         return HomeScreen(
           onOpenProfile: _openProfile,
-          onOpenComplaints: () => setState(() => _index = 2),
-          onOpenTransactions: () => setState(() => _index = 1),
-          onOpenNews: () => setState(() => _index = 3),
+          onOpenComplaints: () => setState(() => _index = 1),
+          onOpenTransactions: () => setState(() => _index = 3),
+          onOpenNews: () => setState(() => _index = 4),
         );
-      case 1:
-        return const TransactionsScreen();
-      case 2:
-        return const ComplaintsScreen();
       case 3:
-        return const NewsScreen();
+        return const TransactionsScreen();
       case 4:
-        return SettingsScreen(onOpenProfile: _openProfile);
+        return const NewsScreen();
       default:
         return const SizedBox.shrink();
     }
@@ -170,6 +196,16 @@ class _MunicipalityBottomNavigationBar extends StatelessWidget {
                   onDestinationSelected: onDestinationSelected,
                   destinations: [
                     NavigationDestination(
+                      icon: const Icon(Icons.settings_outlined),
+                      selectedIcon: const Icon(Icons.settings_rounded),
+                      label: context.tr('الإعدادات'),
+                    ),
+                    NavigationDestination(
+                      icon: const Icon(Icons.chat_bubble_outline_rounded),
+                      selectedIcon: const Icon(Icons.chat_bubble_rounded),
+                      label: context.tr('الشكاوى'),
+                    ),
+                    NavigationDestination(
                       icon: const Icon(Icons.home_outlined),
                       selectedIcon: const Icon(Icons.home_rounded),
                       label: context.tr('الرئيسية'),
@@ -180,19 +216,9 @@ class _MunicipalityBottomNavigationBar extends StatelessWidget {
                       label: context.tr('المعاملات'),
                     ),
                     NavigationDestination(
-                      icon: const Icon(Icons.chat_bubble_outline_rounded),
-                      selectedIcon: const Icon(Icons.chat_bubble_rounded),
-                      label: context.tr('الشكاوى'),
-                    ),
-                    NavigationDestination(
                       icon: const Icon(Icons.newspaper_outlined),
                       selectedIcon: const Icon(Icons.newspaper_rounded),
                       label: context.tr('الأخبار'),
-                    ),
-                    NavigationDestination(
-                      icon: const Icon(Icons.settings_outlined),
-                      selectedIcon: const Icon(Icons.settings_rounded),
-                      label: context.tr('الإعدادات'),
                     ),
                   ],
                 ),

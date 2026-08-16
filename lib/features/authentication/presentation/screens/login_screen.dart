@@ -8,6 +8,7 @@ import '../../../../app/theme/app_colors.dart';
 import '../../../../core/di.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../shared/widgets/municipality_widgets.dart';
+import 'otp_screen.dart';
 
 class AuthLoginScreen extends StatefulWidget {
   const AuthLoginScreen({super.key});
@@ -65,6 +66,40 @@ class _AuthLoginScreenState extends State<AuthLoginScreen> {
         identifier: _identifierController.text.trim(),
         password: _passwordController.text,
       );
+
+      final pendingConfirmation =
+          await DI.auth.hasPendingAccountConfirmation(
+        contact: result.user.email,
+      );
+
+      if (pendingConfirmation) {
+        try {
+          await DI.auth.logout();
+        } catch (_) {
+          // AuthRepositoryApi clears the local token in its finally block.
+        }
+
+        await DI.auth.requestOtp(contact: result.user.email);
+        if (mounted) {
+          _passwordController.clear();
+          Navigator.of(context).pushNamedAndRemoveUntil(
+            AppRoutes.otp,
+            (route) => false,
+            arguments: AuthOtpRouteArguments(
+              contact: result.user.email,
+              purpose: AuthOtpPurpose.accountConfirmation,
+            ),
+          );
+        }
+        return;
+      }
+
+      try {
+        await DI.pushNotifications.start();
+      } catch (error, stackTrace) {
+        debugPrint('PUSH NOTIFICATION LOGIN START ERROR: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
 
       if (mounted) {
         _passwordController.clear();

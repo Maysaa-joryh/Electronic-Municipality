@@ -9,6 +9,7 @@ class AuthRepositoryFake implements AuthRepository {
 
   final Map<String, String> _otpStore = {};
   AuthUser? _currentUser;
+  String? _pendingAccountConfirmationContact;
 
   @override
   AuthUser? get currentUser => _currentUser;
@@ -64,7 +65,8 @@ class AuthRepositoryFake implements AuthRepository {
     }
     // Development fake only. A production repository must send this request
     // over TLS and must never persist the plain-text password locally.
-    _currentUser = AuthUser(
+    _pendingAccountConfirmationContact = registration.email.trim();
+    return AuthUser(
       id: 2,
       fullName: registration.fullName,
       email: registration.email,
@@ -79,7 +81,6 @@ class AuthRepositoryFake implements AuthRepository {
         'is_verified': false,
       },
     );
-    return _currentUser!;
   }
 
   @override
@@ -105,6 +106,30 @@ class AuthRepositoryFake implements AuthRepository {
     required String currentPassword,
     required String newPassword,
   }) async {}
+
+  @override
+  Future<void> markAccountConfirmationPending({
+    required String contact,
+  }) async {
+    _pendingAccountConfirmationContact = contact.trim();
+  }
+
+  @override
+  Future<bool> hasPendingAccountConfirmation({
+    required String contact,
+  }) async {
+    return _pendingAccountConfirmationContact?.toLowerCase() ==
+        contact.trim().toLowerCase();
+  }
+
+  @override
+  Future<void> completeAccountConfirmation({
+    required String contact,
+  }) async {
+    if (await hasPendingAccountConfirmation(contact: contact)) {
+      _pendingAccountConfirmationContact = null;
+    }
+  }
 
   @override
   Future<bool> verifyOtp(

@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:electronic_municipality/app/app.dart';
+import 'package:electronic_municipality/app/router.dart';
 import 'package:electronic_municipality/core/di.dart';
+import 'package:electronic_municipality/core/repositories/auth_repository.dart';
 import 'package:electronic_municipality/features/authentication/data/auth_repository_fake.dart';
+import 'package:electronic_municipality/features/authentication/presentation/screens/otp_screen.dart';
 
 import 'helpers/widget_test_actions.dart';
 
@@ -13,6 +16,54 @@ void main() {
   });
 
   tearDown(DI.resetAuth);
+
+  test(
+    'citizen registration does not create a fake authenticated session',
+    () async {
+      final repository = AuthRepositoryFake();
+
+      await repository.registerCitizen(
+        registration: CitizenRegistration(
+          fullName: 'مواطن جديد',
+          nationalId: '12345678901',
+          dateOfBirth: DateTime(1998, 1, 1),
+          placeOfBirth: 'دمشق',
+          municipalityId: 10,
+          gender: CitizenGender.male,
+          phone: '0990000000',
+          email: 'new-citizen@example.sy',
+          password: 'SafePassword123!',
+          needsSpecialCare: false,
+          acceptedTerms: true,
+        ),
+      );
+
+      expect(
+        await repository.restoreSession(),
+        AuthStartupDestination.login,
+      );
+    },
+  );
+
+  test(
+    'account confirmation marker blocks login until OTP completes',
+    () async {
+      final repository = AuthRepositoryFake();
+      const contact = 'pending-citizen@example.sy';
+
+      await repository.markAccountConfirmationPending(contact: contact);
+      expect(
+        await repository.hasPendingAccountConfirmation(contact: contact),
+        isTrue,
+      );
+
+      await repository.completeAccountConfirmation(contact: contact);
+      expect(
+        await repository.hasPendingAccountConfirmation(contact: contact),
+        isFalse,
+      );
+    },
+  );
 
   testWidgets(
     'password recovery accepts a complete OTP entered at once',
@@ -67,6 +118,51 @@ void main() {
       // Dispose the OTP route so its resend timer cannot leak past the test.
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'account confirmation returns to login without opening password reset',
+    (tester) async {
+      const contact = 'new-citizen@example.sy';
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: const AuthOtpScreen(
+            contact: contact,
+            purpose: AuthOtpPurpose.accountConfirmation,
+          ),
+          routes: <String, WidgetBuilder>{
+            AppRoutes.login: (_) => const Scaffold(
+                  body: Center(child: Text('تسجيل الدخول بعد التأكيد')),
+                ),
+          },
+        ),
+      );
+
+      final otpRequest = DI.auth.requestOtp(contact: contact);
+      await tester.pump(const Duration(milliseconds: 500));
+      await otpRequest;
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('otp_verify_button')),
+        findsOneWidget,
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('otp_code_field')),
+        AuthRepositoryFake.developmentOtpCode,
+      );
+      await tapWhenVisible(
+        tester,
+        find.byKey(const ValueKey('otp_verify_button')),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+
+      expect(find.text('تسجيل الدخول بعد التأكيد'), findsOneWidget);
+      expect(find.text('تعيين كلمة مرور جديدة'), findsNothing);
     },
   );
 

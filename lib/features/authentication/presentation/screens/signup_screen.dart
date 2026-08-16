@@ -9,6 +9,7 @@ import '../../../../core/di.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/repositories/auth_repository.dart';
 import '../../../../shared/widgets/municipality_widgets.dart';
+import 'otp_screen.dart';
 
 const double _signupFieldMaxWidth = 241;
 const double _signupFieldHeight = 46;
@@ -203,12 +204,20 @@ class _AuthSignupScreenState extends State<AuthSignupScreen> {
 
     try {
       await DI.auth.registerCitizen(registration: registration);
+      await DI.auth.markAccountConfirmationPending(
+        contact: registration.email,
+      );
+      await DI.auth.requestOtp(contact: registration.email);
 
       if (!mounted) return;
 
       Navigator.of(context).pushNamedAndRemoveUntil(
-        AppRoutes.shell,
+        AppRoutes.otp,
         (route) => false,
+        arguments: AuthOtpRouteArguments(
+          contact: registration.email,
+          purpose: AuthOtpPurpose.accountConfirmation,
+        ),
       );
     } catch (error, stackTrace) {
       debugPrint('REGISTER CITIZEN ERROR: $error');

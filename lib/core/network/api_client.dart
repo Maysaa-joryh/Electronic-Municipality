@@ -50,6 +50,45 @@ class ApiClient {
     );
   }
 
+  Future<Uint8List> getBytes(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+    bool requiresAuth = true,
+  }) async {
+    if (requiresAuth && !await _tokenStorage.hasToken()) {
+      throw ApiException.unauthorized();
+    }
+
+    try {
+      final response = await _dio.request<Object?>(
+        path,
+        queryParameters: queryParameters,
+        options: Options(
+          method: 'GET',
+          responseType: ResponseType.bytes,
+          extra: <String, Object?>{_requiresAuthExtra: requiresAuth},
+        ),
+      );
+      final body = response.data;
+      if (body is Uint8List) return body;
+      if (body is List<int>) return Uint8List.fromList(body);
+      throw ApiException.invalidResponse(
+        message: 'أعاد الخادم ملفًا بتنسيق غير صالح.',
+      );
+    } on ApiException {
+      rethrow;
+    } on DioException catch (error) {
+      throw ApiException.fromDioException(error);
+    } catch (error) {
+      throw ApiException(
+        kind: ApiExceptionKind.unknown,
+        message: 'تعذر تنزيل الملف.',
+        cause: error,
+        technicalMessage: error.toString(),
+      );
+    }
+  }
+
   Future<Map<String, dynamic>> post(
     String path, {
     Object? data,

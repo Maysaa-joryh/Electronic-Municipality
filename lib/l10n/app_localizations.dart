@@ -639,6 +639,65 @@ class AppLocalizations {
         'Your location is unavailable. Try again or select it manually.',
     'لم تتوفر أسماء للأماكن القريبة.': 'No nearby place names are available.',
 
+    // Citizen service requests.
+    'أنشئ معاملاتك الرسمية وتابع حالتها من مكان واحد.':
+        'Create official requests and follow their status in one place.',
+    'تقديم معاملة جديدة': 'Start a new request',
+    'اختر الخدمة واملأ نموذجها الإلكتروني.':
+        'Choose a service and complete its digital form.',
+    'طلباتي': 'My requests',
+    'الكل': 'All',
+    'مسودات': 'Drafts',
+    'لا توجد معاملات ضمن هذا التصنيف.':
+        'There are no requests in this category.',
+    'يمكنك بدء معاملة جديدة من دليل الخدمات البلدية.':
+        'You can start a new request from the municipal service catalog.',
+    'تعذر تحميل المعاملات. حاول مرة أخرى.':
+        'The requests could not be loaded. Please try again.',
+    'دليل الخدمات': 'Service catalog',
+    'الخدمات البلدية': 'Municipal services',
+    'اختر الخدمة المناسبة وابدأ معاملتك الرسمية.':
+        'Choose the suitable service and start your official request.',
+    'ابحث باسم الخدمة...': 'Search by service name…',
+    'مسح البحث': 'Clear search',
+    'حقول الخدمة:': 'Service fields:',
+    'لا توجد خدمات متاحة حاليًا ضمن بلديتك.':
+        'There are no services currently available in your municipality.',
+    'تعذر الاتصال بالخدمات البلدية. حاول مرة أخرى.':
+        'The municipal services could not be reached. Please try again.',
+    'حفظ المسودة': 'Save draft',
+    'إرسال المعاملة': 'Submit request',
+    'جارٍ الحفظ...': 'Saving…',
+    'تم حفظ المسودة. يمكنك إكمالها وإرسالها لاحقًا.':
+        'The draft was saved. You can complete and submit it later.',
+    'تم إرسال المعاملة بنجاح.': 'The request was submitted successfully.',
+    'تعذر تحميل نموذج الخدمة المحددة.':
+        'The selected service form could not be loaded.',
+    'أكمل الحقول والمرفقات المطلوبة قبل الإرسال.':
+        'Complete the required fields and attachments before submission.',
+    'هذا المرفق مطلوب.': 'This attachment is required.',
+    'حجم الملف يجب ألا يتجاوز 10 ميغابايت.':
+        'The file must not exceed 10 MB.',
+    'تم رفع المرفق بنجاح.': 'The attachment was uploaded successfully.',
+    'الصيغ المدعومة: PDF أو JPG أو PNG، بحجم لا يتجاوز 10 ميغابايت.':
+        'Supported formats: PDF, JPG, or PNG, up to 10 MB.',
+    'إرفاق ملف': 'Attach file',
+    'حذف المرفق': 'Remove attachment',
+    'بيانات المعاملة': 'Request details',
+    'تفاصيل المعاملة': 'Request details',
+    'رقم المعاملة': 'Request number',
+    'المرفقات': 'Attachments',
+    'فتح المرفق': 'Open attachment',
+    'الوثيقة الصادرة': 'Issued document',
+    'تاريخ الإصدار': 'Issued on',
+    'تنزيل الوثيقة': 'Download document',
+    'تنزيل المرفق': 'Download attachment',
+    'سيتم حذف هذه المسودة وجميع مرفقاتها نهائيًا. هل تريد المتابعة؟':
+        'This draft and all of its attachments will be permanently deleted. Continue?',
+    'تحديث': 'Refresh',
+    'لا توجد بيانات نصية مسجلة لهذه المعاملة.':
+        'There are no text details recorded for this request.',
+
     // Backend category names returned in Arabic.
     'الطرق والأرصفة': 'Roads and sidewalks',
     'حفرة في الطريق': 'Road pothole',

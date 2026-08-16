@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'package:electronic_municipality/core/network/api_client.dart';
+import 'package:electronic_municipality/core/notifications/push_notification_service.dart';
 import 'package:electronic_municipality/core/repositories/auth_repository.dart';
 import 'package:electronic_municipality/core/storage/token_storage.dart';
 import 'package:electronic_municipality/features/authentication/data/auth_remote_data_source.dart';
@@ -12,6 +13,9 @@ import 'package:electronic_municipality/features/profile/data/citizen_verificati
 import 'package:electronic_municipality/features/profile/data/citizen_verification_repository_api.dart';
 import 'package:electronic_municipality/features/home/data/unified_complaints_map_repository_api.dart';
 import 'package:electronic_municipality/features/home/domain/unified_complaints_map_repository.dart';
+import 'package:electronic_municipality/features/transactions/data/service_requests_remote_data_source.dart';
+import 'package:electronic_municipality/features/transactions/data/service_requests_repository_api.dart';
+import 'package:electronic_municipality/features/transactions/domain/service_requests_repository.dart';
 
 /// Dependencies used by the running application.
 ///
@@ -25,6 +29,9 @@ class DI {
     tokenStorage: tokenStorage,
   );
 
+  static final PushNotificationService pushNotifications =
+      PushNotificationService(apiClient: apiClient);
+
   static final AuthRemoteDataSource authRemoteDataSource =
       AuthRemoteDataSource(apiClient);
 
@@ -34,6 +41,8 @@ class DI {
   static ComplaintsRepository _complaints = _buildComplaintsRepository();
   static UnifiedComplaintsMapRepository _unifiedComplaintsMap =
       _buildUnifiedComplaintsMapRepository();
+  static ServiceRequestsRepository _serviceRequests =
+      _buildServiceRequestsRepository();
 
   static AuthRepository get auth => _auth;
   static CitizenVerificationRepository get citizenVerification =>
@@ -41,6 +50,7 @@ class DI {
   static ComplaintsRepository get complaints => _complaints;
   static UnifiedComplaintsMapRepository get unifiedComplaintsMap =>
       _unifiedComplaintsMap;
+  static ServiceRequestsRepository get serviceRequests => _serviceRequests;
 
   @visibleForTesting
   static void overrideAuth(AuthRepository repository) {
@@ -53,6 +63,7 @@ class DI {
     _citizenVerification = _buildCitizenVerificationRepository();
     _complaints = _buildComplaintsRepository();
     _unifiedComplaintsMap = _buildUnifiedComplaintsMapRepository();
+    _serviceRequests = _buildServiceRequestsRepository();
   }
 
   @visibleForTesting
@@ -72,6 +83,11 @@ class DI {
     UnifiedComplaintsMapRepository repository,
   ) {
     _unifiedComplaintsMap = repository;
+  }
+
+  @visibleForTesting
+  static void overrideServiceRequests(ServiceRequestsRepository repository) {
+    _serviceRequests = repository;
   }
 
   static AuthRepository _buildAuthRepository() {
@@ -95,5 +111,11 @@ class DI {
 
   static UnifiedComplaintsMapRepository _buildUnifiedComplaintsMapRepository() {
     return UnifiedComplaintsMapRepositoryApi(apiClient: apiClient);
+  }
+
+  static ServiceRequestsRepository _buildServiceRequestsRepository() {
+    return ServiceRequestsRepositoryApi(
+      remoteDataSource: ServiceRequestsRemoteDataSource(apiClient),
+    );
   }
 }

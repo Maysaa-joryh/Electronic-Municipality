@@ -73,7 +73,10 @@ void main() {
         tester,
         find.byKey(const ValueKey('login_submit_button')),
       );
-      await tester.pumpAndSettle();
+      // لا ننتظر استقرار الخريطة بالكامل لأن بلاطات OpenStreetMap
+      // تستمر بمحاولات شبكة محجوبة في بيئة widget test.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byType(NavigationBar), findsOneWidget);
     },

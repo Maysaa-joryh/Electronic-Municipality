@@ -1,3 +1,13 @@
+class AppShellRouteArguments {
+  const AppShellRouteArguments({
+    this.initialIndex = 2,
+    this.serviceRequestId,
+  });
+
+  final int initialIndex;
+  final int? serviceRequestId;
+}
+
 class AppRoutes {
   static const splash = '/';
   static const login = '/login';

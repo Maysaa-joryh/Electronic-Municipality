@@ -11,19 +11,43 @@ import '../../../../core/network/api_exception.dart';
 import '../../../../shared/widgets/municipality_widgets.dart';
 import '../../../../shared/widgets/otp_input.dart';
 
+enum AuthOtpPurpose {
+  passwordReset,
+  accountConfirmation,
+}
+
+class AuthOtpRouteArguments {
+  const AuthOtpRouteArguments({
+    required this.contact,
+    this.purpose = AuthOtpPurpose.passwordReset,
+  });
+
+  final String contact;
+  final AuthOtpPurpose purpose;
+}
+
 class AuthOtpScreen extends StatefulWidget {
   const AuthOtpScreen({
     super.key,
     required this.contact,
+    this.purpose = AuthOtpPurpose.passwordReset,
   });
 
   factory AuthOtpScreen.fromRouteArguments(Object? arguments) {
+    if (arguments is AuthOtpRouteArguments) {
+      return AuthOtpScreen(
+        contact: arguments.contact,
+        purpose: arguments.purpose,
+      );
+    }
+
     return AuthOtpScreen(
       contact: arguments is String ? arguments : '',
     );
   }
 
   final String contact;
+  final AuthOtpPurpose purpose;
 
   @override
   State<AuthOtpScreen> createState() => _AuthOtpScreenState();
@@ -64,6 +88,15 @@ class _AuthOtpScreenState extends State<AuthOtpScreen> {
         setState(() {
           _errorMessage = 'الرمز غير صحيح. حاول مرة أخرى.';
         });
+        return;
+      }
+
+      if (widget.purpose == AuthOtpPurpose.accountConfirmation) {
+        await DI.auth.completeAccountConfirmation(contact: widget.contact);
+        await Navigator.of(context).pushNamedAndRemoveUntil(
+          AppRoutes.login,
+          (route) => false,
+        );
         return;
       }
 
@@ -124,6 +157,13 @@ class _AuthOtpScreenState extends State<AuthOtpScreen> {
   @override
   Widget build(BuildContext context) {
     const destination = 'بريدك الإلكتروني';
+    final isAccountConfirmation =
+        widget.purpose == AuthOtpPurpose.accountConfirmation;
+    final title = isAccountConfirmation ? 'تأكيد الحساب' : 'رمز التحقق';
+    final instruction = isAccountConfirmation
+        ? 'أدخل الرمز المكون من 4 أرقام المرسل إلى $destination لتأكيد حسابك'
+        : 'أدخل الرمز المكون من 4 أرقام المرسل إلى $destination';
+    final verifyLabel = isAccountConfirmation ? 'تأكيد الحساب' : 'تحقق';
 
     return AuthCenterScaffold(
       verticalPadding: EdgeInsets.zero,
@@ -154,7 +194,7 @@ class _AuthOtpScreenState extends State<AuthOtpScreen> {
               ),
               const SizedBox(height: AppSpacing.xxxl),
               Text(
-                'رمز التحقق',
+                title,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.headlineLarge?.copyWith(
                       color: AppColors.deepPrimary,
@@ -164,7 +204,7 @@ class _AuthOtpScreenState extends State<AuthOtpScreen> {
               ),
               const SizedBox(height: AppSpacing.md),
               Text(
-                'أدخل الرمز المكون من 4 أرقام المرسل إلى $destination',
+                instruction,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: AppColors.muted,
@@ -214,7 +254,7 @@ class _AuthOtpScreenState extends State<AuthOtpScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              'تحقق',
+                              verifyLabel,
                               style: Theme.of(context)
                                   .textTheme
                                   .titleLarge

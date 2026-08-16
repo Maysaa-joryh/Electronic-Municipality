@@ -41,6 +41,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     String? warningMessage;
 
     try {
+      try {
+        await DI.pushNotifications.unregister();
+      } catch (_) {
+        // The authenticated logout still clears the local session safely.
+      }
       await DI.auth.logout();
     } catch (error) {
       warningMessage = error is ApiException

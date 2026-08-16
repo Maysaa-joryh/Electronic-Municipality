@@ -188,6 +188,15 @@ abstract class AuthRepository {
   /// Request a password-reset OTP to be sent to the given email.
   Future<void> requestOtp({required String contact});
 
+  /// Track a newly registered account until its OTP confirmation succeeds.
+  Future<void> markAccountConfirmationPending({required String contact});
+
+  /// Return whether this account is still waiting for local OTP confirmation.
+  Future<bool> hasPendingAccountConfirmation({required String contact});
+
+  /// Clear the local confirmation marker after OTP confirmation succeeds.
+  Future<void> completeAccountConfirmation({required String contact});
+
   /// Verify a password-reset OTP for the given email.
   Future<bool> verifyOtp({required String contact, required String code});
 

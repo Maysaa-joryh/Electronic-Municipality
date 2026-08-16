@@ -61,9 +61,9 @@ class AuthRepositoryApi implements AuthRepository {
   Future<AuthSessionModel> registerCitizenWithRequest(
     CitizenRegistrationApiRequest request,
   ) async {
-    final session = await _remoteDataSource.registerCitizen(request);
-    await _persistSession(session);
-    return session;
+    // Laravel currently includes a token in this response, but registration
+    // must not create a local authenticated session before OTP confirmation.
+    return _remoteDataSource.registerCitizen(request);
   }
 
   @override
@@ -90,6 +90,30 @@ class AuthRepositoryApi implements AuthRepository {
     return _remoteDataSource.requestPasswordReset(
       email: normalizedEmail,
     );
+  }
+
+  @override
+  Future<void> markAccountConfirmationPending({
+    required String contact,
+  }) {
+    return _tokenStorage.writePendingAccountConfirmationContact(contact);
+  }
+
+  @override
+  Future<bool> hasPendingAccountConfirmation({
+    required String contact,
+  }) async {
+    final pending =
+        await _tokenStorage.readPendingAccountConfirmationContact();
+    return pending != null &&
+        pending.toLowerCase() == contact.trim().toLowerCase();
+  }
+
+  @override
+  Future<void> completeAccountConfirmation({
+    required String contact,
+  }) {
+    return _tokenStorage.clearPendingAccountConfirmationContact();
   }
 
   @override

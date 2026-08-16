@@ -37,5 +37,28 @@ void main() {
         isNull,
       );
     });
+
+    test('round-trips a locally stored notification centre item', () {
+      const intent = PushNotificationIntent(
+        type: 'service_request',
+        entityId: 11,
+        status: 'pending_review',
+      );
+      final original = PushInboxItem(
+        id: 'message-11',
+        title: 'تحديث معاملة',
+        body: 'تمت إحالة معاملتك للمراجعة.',
+        receivedAt: DateTime.utc(2026, 8, 16, 10, 30),
+        intent: intent,
+        isRead: false,
+      );
+
+      final decoded = PushInboxItem.fromJson(original.toJson());
+
+      expect(decoded, isNotNull);
+      expect(decoded!.id, original.id);
+      expect(decoded.intent?.entityId, 11);
+      expect(decoded.isRead, isFalse);
+    });
   });
 }

@@ -3,10 +3,12 @@ import 'package:electronic_municipality/l10n/localized_text.dart';
 import 'package:electronic_municipality/l10n/app_localizations.dart';
 import '../../../../app/router.dart';
 import '../../../../core/di.dart';
+import '../../../../core/notifications/push_notification_service.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../complaints/presentation/screens/complaints_screen.dart';
 import '../../../home/presentation/screens/home_screen.dart';
 import '../../../news/presentation/screens/news_screen.dart';
+import '../../../notifications/presentation/screens/notification_center_screen.dart';
 import '../../../settings/presentation/screens/settings_screen.dart';
 import '../../../transactions/presentation/screens/service_request_details_screen.dart';
 import '../../../transactions/presentation/screens/transactions_screen.dart';
@@ -49,6 +51,31 @@ class _AppShellState extends State<AppShell> {
 
   void _openProfile() {
     Navigator.of(context).pushNamed(AppRoutes.profile);
+  }
+
+  Future<void> _openNotificationCenter() async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (_) => NotificationCenterDialog(
+        pushNotifications: DI.pushNotifications,
+        onOpenIntent: _openNotificationIntent,
+      ),
+    );
+  }
+
+  Future<void> _openNotificationIntent(PushNotificationIntent intent) async {
+    if (!intent.opensServiceRequest || intent.entityId == null) return;
+    Navigator.of(context).pop();
+    setState(() => _index = 3);
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ServiceRequestDetailsScreen(
+          requestId: intent.entityId!,
+          repository: DI.serviceRequests,
+        ),
+      ),
+    );
   }
 
   @override
@@ -115,6 +142,7 @@ class _AppShellState extends State<AppShell> {
           onOpenComplaints: () => setState(() => _index = 1),
           onOpenTransactions: () => setState(() => _index = 3),
           onOpenNews: () => setState(() => _index = 4),
+          onOpenNotifications: _openNotificationCenter,
         );
       case 3:
         return const TransactionsScreen();

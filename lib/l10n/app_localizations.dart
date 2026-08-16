@@ -123,6 +123,24 @@ class AppLocalizations {
         'Personal information and verification documents',
     'الإشعارات': 'Notifications',
     'تنبيهات المعاملات والمنطقة': 'Transaction and area alerts',
+    'الإشعارات مفعّلة على هذا الجهاز':
+        'Notifications are enabled on this device',
+    'الإذن مرفوض — اضغط للمراجعة':
+        'Permission denied — tap to review',
+    'جارٍ تفعيل الإشعارات...': 'Enabling notifications…',
+    'تم تفعيل إشعارات بلديتنا على هذا الجهاز.':
+        'Baladiatuna notifications are enabled on this device.',
+    'تم رفض صلاحية الإشعارات. فعّلها من إعدادات التطبيق في Android.':
+        'Notification permission was denied. Enable it in the app settings on Android.',
+    'لم يتم تحديد صلاحية الإشعارات بعد.':
+        'Notification permission has not been selected yet.',
+    'تعذر تفعيل الإشعارات:': 'Could not enable notifications:',
+    'تحديد الكل كمقروء': 'Mark all as read',
+    'مركز الإشعارات': 'Notification Center',
+    'إشعارات محفوظة على هذا الجهاز': 'notifications saved on this device',
+    'لا توجد إشعارات بعد': 'No notifications yet',
+    'ستظهر هنا تحديثات معاملاتك وشكاواك عند وصولها.':
+        'Updates for your requests and complaints will appear here when they arrive.',
     'اللغة': 'Language',
     'العربية': 'Arabic',
     'الإنجليزية': 'English',

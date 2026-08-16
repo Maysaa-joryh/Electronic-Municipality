@@ -1,19 +1,41 @@
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
+
 import 'app/app.dart';
+import 'core/notifications/firebase_bootstrap.dart';
 import 'l10n/app_locale_controller.dart';
 
-@pragma('vm:entry-point')
-Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final localeController = AppLocaleController();
+  final firebaseInitialization = FirebaseBootstrap.ensureInitialized();
+
+  // Render Flutter immediately so the app's custom splash replaces Android's
+  // launch window. FCM users still await this same shared initialization.
+  runApp(AppRoot(localeController: localeController));
+
+  unawaited(
+    _initializeRuntimeServices(
+      localeController: localeController,
+      firebaseInitialization: firebaseInitialization,
+    ),
+  );
 }
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-  final localeController = AppLocaleController();
+Future<void> _initializeRuntimeServices({
+  required AppLocaleController localeController,
+  required Future<void> firebaseInitialization,
+}) async {
   await localeController.load();
-  runApp(AppRoot(localeController: localeController));
+
+  try {
+    await firebaseInitialization;
+  } catch (error, stackTrace) {
+    // Firebase failures do not block the custom splash or the rest of the app.
+    // The notification action retries the same bootstrap and shows its error.
+    debugPrint('FIREBASE INITIALIZATION ERROR: $error');
+    debugPrintStack(stackTrace: stackTrace);
+  }
 }

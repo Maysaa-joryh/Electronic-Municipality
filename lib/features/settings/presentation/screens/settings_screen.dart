@@ -4,7 +4,9 @@ import '../../../../app/router.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/di.dart';
 import '../../../../core/network/api_exception.dart';
+import '../../../../core/notifications/push_notification_service.dart';
 import '../../../../l10n/app_locale_controller.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/municipality_widgets.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -17,6 +19,70 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _isLoggingOut = false;
+  bool _isUpdatingNotifications = false;
+  PushNotificationPermission _notificationPermission =
+      PushNotificationPermission.notDetermined;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotificationPermission();
+  }
+
+  Future<void> _loadNotificationPermission() async {
+    try {
+      final permission = await DI.pushNotifications.getPermissionStatus();
+      if (mounted) setState(() => _notificationPermission = permission);
+    } catch (_) {
+      // The settings screen remains usable if FCM is not initialized yet.
+    }
+  }
+
+  Future<void> _configureNotifications() async {
+    if (_isUpdatingNotifications) return;
+    setState(() => _isUpdatingNotifications = true);
+
+    try {
+      await DI.pushNotifications.start();
+      final permission = await DI.pushNotifications.getPermissionStatus();
+      if (!mounted) return;
+      setState(() => _notificationPermission = permission);
+
+      final message = switch (permission) {
+        PushNotificationPermission.authorized ||
+        PushNotificationPermission.provisional =>
+          context.tr('تم تفعيل إشعارات بلديتنا على هذا الجهاز.'),
+        PushNotificationPermission.denied => context.tr(
+            'تم رفض صلاحية الإشعارات. فعّلها من إعدادات التطبيق في Android.',
+          ),
+        PushNotificationPermission.notDetermined =>
+          context.tr('لم يتم تحديد صلاحية الإشعارات بعد.'),
+      };
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${context.tr('تعذر تفعيل الإشعارات:')} $error'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUpdatingNotifications = false);
+    }
+  }
+
+  String _notificationSubtitle(BuildContext context) {
+    return switch (_notificationPermission) {
+      PushNotificationPermission.authorized ||
+      PushNotificationPermission.provisional =>
+        context.tr('الإشعارات مفعّلة على هذا الجهاز'),
+      PushNotificationPermission.denied =>
+        context.tr('الإذن مرفوض — اضغط للمراجعة'),
+      PushNotificationPermission.notDetermined =>
+        context.tr('تنبيهات المعاملات والمنطقة'),
+    };
+  }
 
   Future<void> _openLanguagePicker() async {
     final controller = AppLocaleScope.of(context);
@@ -46,6 +112,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       } catch (_) {
         // The authenticated logout still clears the local session safely.
       }
+      await DI.pushNotifications.clearInbox();
       await DI.auth.logout();
     } catch (error) {
       warningMessage = error is ApiException
@@ -83,10 +150,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: 'البيانات الشخصية ومستندات التوثيق',
               onTap: widget.onOpenProfile),
           const SizedBox(height: 12),
-          const _SettingsTile(
-              icon: Icons.notifications_none,
-              title: 'الإشعارات',
-              subtitle: 'تنبيهات المعاملات والمنطقة'),
+          _SettingsTile(
+            key: const ValueKey('settings_notifications_tile'),
+            icon: _notificationPermission == PushNotificationPermission.authorized ||
+                    _notificationPermission == PushNotificationPermission.provisional
+                ? Icons.notifications_active_outlined
+                : Icons.notifications_none,
+            title: _isUpdatingNotifications
+                ? context.tr('جارٍ تفعيل الإشعارات...')
+                : context.tr('الإشعارات'),
+            subtitle: _notificationSubtitle(context),
+            onTap: _isUpdatingNotifications ? null : _configureNotifications,
+          ),
           const SizedBox(height: 12),
           _SettingsTile(
             key: const ValueKey('settings_language_tile'),

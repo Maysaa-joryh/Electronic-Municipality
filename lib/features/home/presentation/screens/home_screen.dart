@@ -7,6 +7,7 @@ import 'package:electronic_municipality/l10n/localized_text.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../core/di.dart';
+import '../../../../core/notifications/push_notification_service.dart';
 import '../../../../shared/widgets/municipality_widgets.dart';
 import '../../domain/unified_complaints_map_repository.dart';
 
@@ -23,6 +24,7 @@ class HomeScreen extends StatelessWidget {
     required this.onOpenComplaints,
     required this.onOpenTransactions,
     required this.onOpenNews,
+    this.onOpenNotifications,
     this.unifiedComplaintsRepository,
     this.mapOverride,
   });
@@ -31,6 +33,7 @@ class HomeScreen extends StatelessWidget {
   final VoidCallback onOpenComplaints;
   final VoidCallback onOpenTransactions;
   final VoidCallback onOpenNews;
+  final VoidCallback? onOpenNotifications;
   final UnifiedComplaintsMapRepository? unifiedComplaintsRepository;
   final Widget? mapOverride;
 
@@ -41,7 +44,10 @@ class HomeScreen extends StatelessWidget {
       padding: EdgeInsets.zero,
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
-        HomeTopBar(onOpenProfile: onOpenProfile),
+        HomeTopBar(
+          onOpenProfile: onOpenProfile,
+          onOpenNotifications: onOpenNotifications,
+        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 26, 20, 34),
           child: Column(
@@ -67,8 +73,14 @@ class HomeScreen extends StatelessWidget {
 }
 
 class HomeTopBar extends StatelessWidget {
-  const HomeTopBar({super.key, required this.onOpenProfile});
+  const HomeTopBar({
+    super.key,
+    required this.onOpenProfile,
+    this.onOpenNotifications,
+  });
+
   final VoidCallback onOpenProfile;
+  final VoidCallback? onOpenNotifications;
 
   @override
   Widget build(BuildContext context) {
@@ -88,13 +100,20 @@ class HomeTopBar extends StatelessWidget {
               key: const ValueKey('home_notifications_button'),
               tooltip: context.tr('الإشعارات'),
               padding: EdgeInsets.zero,
-              onPressed: () {},
-              icon: const BadgeDot(
-                child: Icon(
-                  Icons.notifications_none_rounded,
-                  color: _homeMutedText,
-                  size: 26,
-                ),
+              onPressed: onOpenNotifications,
+              icon: ValueListenableBuilder<List<PushInboxItem>>(
+                valueListenable: DI.pushNotifications.inbox,
+                builder: (context, items, _) {
+                  final hasUnread = items.any((item) => !item.isRead);
+                  final icon = Icon(
+                    hasUnread
+                        ? Icons.notifications_active_rounded
+                        : Icons.notifications_none_rounded,
+                    color: hasUnread ? _homeDeepGreen : _homeMutedText,
+                    size: 26,
+                  );
+                  return hasUnread ? BadgeDot(child: icon) : icon;
+                },
               ),
             ),
           ),
